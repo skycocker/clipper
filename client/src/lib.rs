@@ -10,5 +10,6 @@
 //! - [`terminal`] — RAII raw-mode guard.
 
 pub mod ble;
+pub mod reconnect;
 pub mod session;
 pub mod terminal;

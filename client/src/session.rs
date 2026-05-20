@@ -32,8 +32,8 @@ pub enum SessionExit {
 /// `notifications`. Blocks until the user exits, stdin closes, or an error
 /// surfaces from any side.
 pub async fn run_session<R, W, S>(
-    mut stdin: R,
-    mut stdout: W,
+    stdin: &mut R,
+    stdout: &mut W,
     writer: &dyn FlipperWriter,
     mut notifications: S,
 ) -> Result<SessionExit>
@@ -121,10 +121,12 @@ mod tests {
         let writer_clone = writer.clone();
 
         let session = tokio::spawn(async move {
+            let mut stdin_reader = stdin_reader;
+            let mut stdout_writer = stdout_writer;
             let notifications = ReceiverStream::new(notif_rx);
             run_session(
-                stdin_reader,
-                stdout_writer,
+                &mut stdin_reader,
+                &mut stdout_writer,
                 writer_clone.as_ref(),
                 notifications,
             )
