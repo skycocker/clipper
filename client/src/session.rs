@@ -2,14 +2,28 @@
 //! glue, no platform/IO assumptions beyond the trait bounds — so tests can
 //! drive it with mock streams.
 
+use std::time::Duration;
+
 use anyhow::{bail, Result};
 use futures::{Stream, StreamExt};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::ble::FlipperWriter;
 
-/// Ctrl+]  — telnet-style escape. Exits the session loop cleanly.
-pub const EXIT_KEY: u8 = 0x1d;
+/// How often to poll `FlipperWriter::is_connected` to catch silent disconnects.
+const LIVENESS_INTERVAL: Duration = Duration::from_millis(500);
+
+/// Byte sequences in stdin that exit the session loop cleanly. Any byte from
+/// this set, when seen in a stdin chunk, ends the session. We accept multiple
+/// because terminal emulators and shells sometimes intercept individual ones:
+///   - 0x1d  Ctrl+]   (telnet-style, the "preferred" key)
+///   - 0x1c  Ctrl+\\   (file separator; rarely bound by shells)
+///   - 0x04  Ctrl+D   (EOT; in raw mode shells don't translate it to EOF)
+pub const EXIT_KEYS: &[u8] = &[0x1d, 0x1c, 0x04];
+
+/// First key from EXIT_KEYS — used in tests and as the canonical "what to
+/// send in test inputs".
+pub const EXIT_KEY: u8 = EXIT_KEYS[0];
 
 /// Byte forwarded to the Flipper when the host process receives SIGINT. The
 /// Flipper CLI interprets 0x03 as an interrupt so the user can break a
@@ -43,6 +57,10 @@ where
     S: Stream<Item = Vec<u8>> + Unpin,
 {
     let mut buf = [0u8; STDIN_CHUNK];
+    let mut liveness = tokio::time::interval(LIVENESS_INTERVAL);
+    // Skip the immediate first tick — interval fires once at t=0 by default.
+    liveness.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    liveness.tick().await;
 
     loop {
         tokio::select! {
@@ -53,13 +71,11 @@ where
                 if n == 0 {
                     return Ok(SessionExit::StdinClosed);
                 }
-                if buf[..n].contains(&EXIT_KEY) {
-                    // Forward everything *before* the exit byte so a final
+                if let Some(idx) = buf[..n].iter().position(|b| EXIT_KEYS.contains(b)) {
+                    // Forward everything *before* the exit byte so any final
                     // CR isn't dropped, then exit.
-                    if let Some(idx) = buf[..n].iter().position(|b| *b == EXIT_KEY) {
-                        if idx > 0 {
-                            writer.write(&buf[..idx]).await?;
-                        }
+                    if idx > 0 {
+                        writer.write(&buf[..idx]).await?;
                     }
                     return Ok(SessionExit::UserExited);
                 }
@@ -74,6 +90,12 @@ where
 
             _ = tokio::signal::ctrl_c() => {
                 writer.write(&[REMOTE_INTERRUPT]).await?;
+            }
+
+            _ = liveness.tick() => {
+                if !writer.is_connected().await {
+                    bail!("peripheral disconnected");
+                }
             }
         }
     }
@@ -105,6 +127,35 @@ mod tests {
         async fn write(&self, data: &[u8]) -> Result<()> {
             self.0.lock().unwrap().extend_from_slice(data);
             Ok(())
+        }
+        async fn is_connected(&self) -> bool {
+            true
+        }
+    }
+
+    /// A FlipperWriter that flips to disconnected after N polls of
+    /// is_connected. Used to exercise the liveness-check path.
+    struct DisconnectingWriter {
+        polls_until_dead: std::sync::atomic::AtomicU32,
+    }
+
+    impl DisconnectingWriter {
+        fn new(polls_until_dead: u32) -> Self {
+            Self {
+                polls_until_dead: std::sync::atomic::AtomicU32::new(polls_until_dead),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl FlipperWriter for DisconnectingWriter {
+        async fn write(&self, _: &[u8]) -> Result<()> {
+            Ok(())
+        }
+        async fn is_connected(&self) -> bool {
+            use std::sync::atomic::Ordering::Relaxed;
+            let remaining = self.polls_until_dead.fetch_sub(1, Relaxed);
+            remaining > 0
         }
     }
 
@@ -216,6 +267,38 @@ mod tests {
         let (exit, ble, _stdout) = drive(vec![input], vec![]).await;
         assert_eq!(exit, SessionExit::UserExited);
         assert_eq!(&ble, b"ab");
+    }
+
+    #[tokio::test]
+    async fn liveness_check_returns_err_when_peer_disconnects() {
+        // Liveness ticks every 500ms; let the mock disconnect on the first
+        // post-tick poll.
+        let writer = DisconnectingWriter::new(0);
+        let (stdin_writer, stdin_reader) = tokio::io::duplex(64);
+        let (_, stdout_writer) = tokio::io::duplex(64);
+        let (_notif_tx, notif_rx) = mpsc::channel::<Vec<u8>>(1);
+
+        let session = tokio::spawn(async move {
+            let mut stdin_reader = stdin_reader;
+            let mut stdout_writer = stdout_writer;
+            let notifications = ReceiverStream::new(notif_rx);
+            run_session(
+                &mut stdin_reader,
+                &mut stdout_writer,
+                &writer,
+                notifications,
+            )
+            .await
+        });
+
+        // Keep stdin open so EOF doesn't race the liveness check.
+        let result = tokio::time::timeout(std::time::Duration::from_secs(3), session)
+            .await
+            .expect("session should error within 3s of liveness tick")
+            .unwrap();
+
+        assert!(result.is_err(), "expected disconnect error, got {result:?}");
+        drop(stdin_writer);
     }
 
     #[tokio::test]

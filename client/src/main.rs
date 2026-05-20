@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
         match ble::connect(&name_filter, SCAN_TIMEOUT, CONNECT_TIMEOUT, debug).await {
             Ok((writer, notifications)) => {
                 attempt = 0;
-                eprint!("\r\nclipper: connected — type to send, Ctrl+] to exit.\r\n\r\n");
+                eprint!("\r\nclipper: connected — type to send, Ctrl+] (or Ctrl+\\, Ctrl+D) to exit.\r\n\r\n");
                 let outcome = run_session(&mut stdin, &mut stdout, &writer, notifications).await;
                 writer.disconnect().await;
 

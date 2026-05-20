@@ -26,7 +26,14 @@ pub const CLIPPER_ADV_UUID: Uuid = Uuid::from_u128(0x0000_3081_0000_1000_8000_00
 /// The session loop is generic over this so tests can substitute a mock.
 #[async_trait]
 pub trait FlipperWriter: Send + Sync {
+    /// Send bytes toward the Flipper.
     async fn write(&self, data: &[u8]) -> Result<()>;
+
+    /// Lightweight liveness check. Polled periodically by the session loop
+    /// so we can detect disconnects that the notification stream doesn't
+    /// surface (btleplug on macOS keeps the stream open after disconnect
+    /// rather than ending it).
+    async fn is_connected(&self) -> bool;
 }
 
 /// btleplug-backed writer — writes bytes to the Flipper serial RX
@@ -43,6 +50,10 @@ impl FlipperWriter for BleWriter {
             .write(&self.rx_char, data, WriteType::WithResponse)
             .await
             .context("BLE write failed")
+    }
+
+    async fn is_connected(&self) -> bool {
+        self.peripheral.is_connected().await.unwrap_or(false)
     }
 }
 
