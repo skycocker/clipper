@@ -1,0 +1,17 @@
+# Rust
+target/
+**/*.rs.bk
+
+# Flipper SDK (ufbt)
+.ufbt/
+plugin/.vscode/
+plugin/build/
+plugin/.idea/
+plugin/dist/
+
+# Editor / OS noise
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
