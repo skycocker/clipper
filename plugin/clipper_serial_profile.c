@@ -40,12 +40,12 @@ static void clipper_serial_profile_stop(FuriHalBleProfileBase* base) {
 
 #define CONNECTION_INTERVAL_MIN (0x06)
 #define CONNECTION_INTERVAL_MAX (0x24)
-/* Supervisor timeout, units of 10ms. 200 = 2s. Stock Flipper profile uses 0
- * (defaults), which means macOS waits ~30s after a peer goes silent before
- * declaring the link dead. 2s is fast enough that clipper's reconnect kicks
- * in promptly, and well above the spec minimum (>(1+latency)*conn_int_max*2
- * = ~113ms with our params). */
-#define CONNECTION_SUPERVISOR_TIMEOUT (200)
+/* Match the stock serial profile's connection parameters exactly. We tried
+ * 200 (2s) here to speed up Mac-side disconnect detection, but it didn't
+ * actually help (macOS overrides peripheral-requested params anyway) and
+ * is suspected of being one of several inputs into the BLE pairing
+ * crashes we hit during testing. Back to firmware default. */
+#define CONNECTION_SUPERVISOR_TIMEOUT (0)
 
 static const GapConfig clipper_gap_template = {
     .adv_service =
