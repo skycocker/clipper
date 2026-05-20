@@ -120,10 +120,12 @@ name = "clipper"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "btleplug",
  "crossterm",
  "futures",
  "tokio",
+ "tokio-stream",
  "uuid",
 ]
 
