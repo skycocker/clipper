@@ -3,44 +3,48 @@
 # requires-python = ">=3.12"
 # dependencies = ["bleak"]
 # ///
-"""Spike validation: confirms our .fap-defined BLE profile is reachable.
+"""End-to-end smoke test for the Clipper BLE CLI bridge.
 
-What this checks:
-1. The Flipper advertises as 'Clipper' (set in clipper_test_profile.c get_gap_config).
-2. We can connect via CoreBluetooth/bleak.
-3. The custom service (12345678-cccc-eeee-0001-deadbeef0000) is present.
-4. Reading the test characteristic returns the bytes b"hello".
+What this does:
+1. Scan for a Clipper advertisement (matches GAP service UUID 0x3081 OR
+   advertised name "Clipper").
+2. Connect via bleak. First time triggers a macOS pairing dialog — confirm
+   the 6-digit code on both Mac and Flipper.
+3. Subscribe to indications on the Flipper TX characteristic.
+4. Write a CLI command to the RX characteristic (`help\\r`).
+5. Collect ~3 seconds of output, print it, and assert it's non-trivial.
 
-Prereqs:
-- `ufbt launch_app` (or sideload + launch) the clipper.fap on the Flipper.
-- The plugin's main screen says "BLE: Active".
-- Nothing else (mobile app, qFlipper) is connected to the Flipper.
-
-Run:  `uv run tools/spike_smoke.py`
-Exit codes: 0 = pass, 1 = no device, 2 = no service, 3 = wrong payload.
+Run:  uv run tools/spike_smoke.py
+Prereqs: clipper.fap is running on the Flipper (screen says
+"BLE CLI: ready"), nothing else connected to the device.
 """
 import asyncio
 import sys
 
 from bleak import BleakClient, BleakScanner
 
-CLIPPER_SVC_UUID = "12345678-cccc-eeee-0001-deadbeef0000"
-CLIPPER_CHAR_UUID = "12345678-cccc-eeee-0001-deadbeef0001"
-# 16-bit GAP advertising UUID (set in clipper_test_profile.c get_gap_config).
-# Expanded to full 128-bit form via the Bluetooth Base UUID for matching.
-CLIPPER_ADV_UUID_16 = "0000c11f-0000-1000-8000-00805f9b34fb"
-EXPECTED = b"hello"
+# Standard Flipper serial service UUIDs (our profile reuses BleServiceSerial).
+SERIAL_SVC_UUID = "8fe5b3d5-2e7f-4a98-2a48-7acc60fe0000"
+SERIAL_RX_UUID = "19ed82ae-ed21-4c9d-4145-228e62fe0000"  # host -> Flipper (write)
+SERIAL_TX_UUID = "19ed82ae-ed21-4c9d-4145-228e61fe0000"  # Flipper -> host (indicate)
+
+# 16-bit GAP advertising UUID we set in clipper_serial_profile.c. Expanded to
+# 128-bit via the Bluetooth Base UUID for matching against adv data.
+CLIPPER_ADV_UUID_16 = "00003081-0000-1000-8000-00805f9b34fb"
+
 SCAN_SECONDS = 12.0
+COLLECT_SECONDS = 3.0
+COMMAND = b"help\r"
 
 
 async def find_clipper(timeout: float):
-    print(f"Scanning {timeout:.0f}s for the Clipper advertising UUID ({CLIPPER_ADV_UUID_16})...")
+    print(f"Scanning {timeout:.0f}s for a Clipper advertisement...")
     found: dict = {}
 
     def cb(device, adv):
-        svcs = [s.lower() for s in (adv.service_uuids or [])]
         name = adv.local_name or device.name or ""
-        if CLIPPER_ADV_UUID_16 in svcs or name.lower().startswith("clipper"):
+        svcs = [s.lower() for s in (adv.service_uuids or [])]
+        if name.lower().startswith("clipper") or CLIPPER_ADV_UUID_16 in svcs:
             found[device.address] = (device, adv)
 
     async with BleakScanner(detection_callback=cb):
@@ -51,42 +55,58 @@ async def find_clipper(timeout: float):
 async def main() -> int:
     found = await find_clipper(SCAN_SECONDS)
     if not found:
-        print("FAIL: no Clipper advertisement seen.")
-        print("  - Is the plugin actually running? (Should show 'BLE: Active' on the Flipper screen.)")
-        print("  - Is anything else connected to the Flipper? (Close iOS/qFlipper apps.)")
+        print("FAIL: no Clipper advertisement seen. Is the plugin running?")
         return 1
 
-    for addr, (device, adv) in found.items():
+    for addr, (_, adv) in found.items():
         print(f"  found: {addr}  rssi={adv.rssi}  name={adv.local_name!r}")
 
     addr, (device, _) = next(iter(found.items()))
     print(f"\nConnecting to {addr}...")
-    async with BleakClient(device, timeout=20.0) as client:
-        print(f"  connected: {client.is_connected}")
+    print("  (First connect may pop a pairing dialog. Confirm the matching 6-digit code on Mac AND Flipper.)")
+
+    received: bytearray = bytearray()
+
+    def on_indication(_char, data: bytearray):
+        received.extend(data)
+        sys.stdout.write(data.decode("utf-8", "replace"))
+        sys.stdout.flush()
+
+    async with BleakClient(device, timeout=30.0) as client:
+        print(f"  connected: {client.is_connected}\n")
 
         services = list(client.services)
-        print(f"\nServices found ({len(services)}):")
-        clipper_svc = None
-        for svc in services:
-            marker = "  <-- OUR SERVICE" if svc.uuid.lower() == CLIPPER_SVC_UUID else ""
-            print(f"  {svc.uuid}{marker}")
-            for ch in svc.characteristics:
-                print(f"    char {ch.uuid}  [{','.join(ch.properties)}]")
-            if svc.uuid.lower() == CLIPPER_SVC_UUID:
-                clipper_svc = svc
-
-        if clipper_svc is None:
-            print("FAIL: custom service UUID not present after connect.")
+        svc_uuids = [s.uuid.lower() for s in services]
+        if SERIAL_SVC_UUID not in svc_uuids:
+            print(f"FAIL: serial service {SERIAL_SVC_UUID} not present.")
+            print(f"  Available: {svc_uuids}")
             return 2
 
-        print(f"\nReading {CLIPPER_CHAR_UUID}...")
-        value = await client.read_gatt_char(CLIPPER_CHAR_UUID)
-        print(f"  got: {value!r}  (expected: {EXPECTED!r})")
-        if value != EXPECTED:
-            print("FAIL: payload mismatch.")
-            return 3
+        print(f"Subscribing to TX ({SERIAL_TX_UUID})...")
+        await client.start_notify(SERIAL_TX_UUID, on_indication)
+        await asyncio.sleep(0.5)  # let initial prompt arrive
 
-    print("\nPASS: .fap-defined profile is fully working over BLE on macOS.")
+        print(f"Writing {COMMAND!r} to RX ({SERIAL_RX_UUID})...\n")
+        print("--- BLE CLI output below ---")
+        await client.write_gatt_char(SERIAL_RX_UUID, COMMAND, response=True)
+
+        await asyncio.sleep(COLLECT_SECONDS)
+        await client.stop_notify(SERIAL_TX_UUID)
+
+    print("\n--- end output ---\n")
+    print(f"Collected {len(received)} bytes from TX.")
+    if len(received) < 5:
+        print("FAIL: not enough output. Bridge probably isn't wired correctly.")
+        return 3
+
+    text = received.decode("utf-8", "replace").lower()
+    # Loose assertion — `help` typically prints a list of commands, and the
+    # Flipper CLI prompt is `>:`. Look for either as a sanity check.
+    if "help" not in text and "available" not in text and ">:" not in text:
+        print("FAIL: output doesn't look like CLI response.")
+        return 4
+
+    print("PASS: BLE CLI bridge round-tripped a real CLI command.")
     return 0
 
 
