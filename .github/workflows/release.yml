@@ -1,0 +1,167 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build a release for (e.g. v0.1.0)"
+        required: true
+
+jobs:
+  # ---- macOS (both architectures from a single Apple Silicon runner) ----
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client
+      - name: Build arm64
+        working-directory: client
+        run: cargo build --release --target aarch64-apple-darwin
+      - name: Build x86_64
+        working-directory: client
+        run: cargo build --release --target x86_64-apple-darwin
+      - name: Package
+        working-directory: client
+        run: |
+          mkdir -p artifacts
+          tar -czf artifacts/clipper-${{ github.ref_name }}-aarch64-apple-darwin.tar.gz \
+              -C target/aarch64-apple-darwin/release clipper
+          tar -czf artifacts/clipper-${{ github.ref_name }}-x86_64-apple-darwin.tar.gz \
+              -C target/x86_64-apple-darwin/release clipper
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clipper-macos
+          path: client/artifacts/*
+
+  # ---- Linux (x86_64 only for v0.x; arm64 users can cargo install) ----
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install BLE dev headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client
+      - name: Build
+        working-directory: client
+        run: cargo build --release
+      - name: Package
+        working-directory: client
+        run: |
+          mkdir -p artifacts
+          tar -czf artifacts/clipper-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz \
+              -C target/release clipper
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clipper-linux
+          path: client/artifacts/*
+
+  # ---- Windows (build but mark experimental in release notes) ----
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client
+      - name: Build
+        working-directory: client
+        run: cargo build --release
+      - name: Package
+        working-directory: client
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          cd target/release
+          zip ../../artifacts/clipper-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip clipper.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clipper-windows
+          path: client/artifacts/*
+
+  # ---- Flipper .fap (one for all hardware revisions) ----
+  build-plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ufbt
+        run: pipx install ufbt
+      - name: Build .fap
+        working-directory: plugin
+        run: ufbt
+      - name: Stage artifact with versioned name
+        working-directory: plugin
+        run: |
+          mkdir -p artifacts
+          cp dist/clipper.fap artifacts/clipper-${{ github.ref_name }}.fap
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clipper-plugin
+          path: plugin/artifacts/*
+
+  # ---- Publish ----
+  release:
+    needs: [build-macos, build-linux, build-windows, build-plugin]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: List artifacts
+        run: ls -la dist
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          body: |
+            ## clipper ${{ github.ref_name }}
+
+            Interactive Flipper Zero CLI shell over Bluetooth.
+
+            ### Install
+
+            **macOS (Apple Silicon):**
+            ```
+            tar -xzf clipper-${{ github.ref_name }}-aarch64-apple-darwin.tar.gz
+            ./clipper
+            ```
+
+            **macOS (Intel):**
+            ```
+            tar -xzf clipper-${{ github.ref_name }}-x86_64-apple-darwin.tar.gz
+            ./clipper
+            ```
+
+            **Linux (x86_64):**
+            ```
+            tar -xzf clipper-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz
+            ./clipper
+            ```
+            Requires `libdbus-1`. On first use, pair via `bluetoothctl pair <addr>`.
+
+            **Windows 11 (experimental):**
+            Extract `clipper-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip` and run `clipper.exe`.
+
+            **Plugin (`.fap`):**
+            Copy `clipper-${{ github.ref_name }}.fap` to `/ext/apps/Bluetooth/clipper.fap` on the Flipper, then launch from the device's Apps menu. Or build from source with `ufbt launch`.

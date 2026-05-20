@@ -1,31 +1,127 @@
 # clipper
 
-Interactive Flipper Zero CLI shell over Bluetooth — like `screen /dev/cu.usbmodem*`,
-but cordless.
+**Interactive Flipper Zero CLI shell over Bluetooth — like `screen /dev/cu.usbmodem*`, but cordless.**
 
-Two pieces:
+The Flipper has a great CLI accessible over its USB CDC interface (`storage`,
+`subghz`, `nfc`, `gpio`, `bt`, `ps`, etc.). Over Bluetooth, the stock firmware
+exposes the *same serial endpoint* — but routes every byte to a protobuf-RPC
+subsystem instead of the CLI shell. So no interactive shell over BLE without
+something on both ends.
 
-- **`plugin/`** — a Flipper `.fap` that, when launched on the device, exposes a
-  Nordic-UART-style GATT service and bridges it to a real Flipper CLI session.
-- **`client/`** — a host-side Rust CLI (`clipper`) that connects to that GATT
-  service and gives you a normal terminal: type commands, see streaming output,
-  `^C` to interrupt, `^D` to exit.
+`clipper` is that something. A small Flipper `.fap` plugin reroutes the
+BLE serial endpoint to a real `cli_shell_alloc()` session, and a host-side
+Rust binary opens a raw-mode TTY that pipes to/from it.
 
-## Status
+```
+$ clipper
+clipper: scanning 12s for "CLIpper"...
+clipper: match name="CLIpper" svc=yes rssi=Some(-42)
+clipper: connecting...
+clipper: connected — type to send, Ctrl+] (or Ctrl+\, Ctrl+D) to exit.
 
-Pre-alpha. Project scaffolding only.
+CLIpper :: BLE CLI shell
+
+>: ps
+Name                           Stack
+DesktopSrv                     2048
+GuiSrv                         2048
+...
+>:
+```
+
+## Project layout
+
+| Dir | What |
+|---|---|
+| `plugin/` | The Flipper `.fap`. Registers its own `FuriHalBleProfileTemplate` reusing the stock `BleServiceSerial` shape so existing clients (any "Flipper serial over BLE" tool) work too. |
+| `client/` | The Rust binary. `btleplug` + `tokio` + `crossterm`. |
+| `tools/` | Diagnostic Python scripts: `scan.py` (BLE scan), `flipper_cli.py` (drive Flipper over USB), `test_reconnect.py` (hardware integration test). |
 
 ## Platforms
 
 | OS | Status |
 |---|---|
-| macOS (Apple Silicon) | Primary target. Tested daily. |
-| Linux | Supported. Tested before each release. First-time BLE pair via `bluetoothctl`. |
+| macOS (Apple Silicon) | Primary target. Daily-used. |
+| Linux | Supported. Tested before each release. First-time BLE pair via `bluetoothctl pair <addr>`. |
 | Windows 11 | Experimental. CI builds the binary; no hand-tested validation yet. Reports welcome. |
 
 ## Quick start
 
-*(Coming once the alpha builds.)*
+Until prebuilt binaries are published, build from source.
+
+**Prereqs:**
+- Rust (any stable >= 1.75)
+- Python 3.12 + [uv](https://docs.astral.sh/uv/) — only for the diagnostic scripts
+- [`ufbt`](https://github.com/flipperdevices/flipperzero-ufbt) — only to build/flash the plugin
+- A Flipper Zero (any firmware that ships the modern `cli_shell_alloc` API — Momentum tested)
+
+**1. Build and flash the plugin** (USB cable):
+```
+cd plugin
+ufbt launch     # builds, copies to /ext/apps/Bluetooth/clipper.fap, and launches it
+```
+
+The plugin's screen should show "CLIpper / BLE CLI: ready / Back to exit".
+
+**2. Build and run the client:**
+```
+cd client
+cargo run --release
+```
+
+First connect pops a system pairing dialog on the Mac and a 6-digit numeric
+comparison prompt on the Flipper. Confirm on both. Once bonded, subsequent
+runs are silent.
+
+## Usage
+
+```
+clipper [<name-substring>]
+```
+
+- No arg: match the default `CLIpper` name OR our `0x3081` advertising service UUID.
+- With arg: match any device whose advertised name contains the substring (case-insensitive). Useful if you've renamed the plugin.
+
+**Exit keys** (any of these work; we accept several because terminal emulators
+sometimes intercept individual control bytes):
+- `Ctrl+]` — telnet-style escape
+- `Ctrl+\` — file separator
+- `Ctrl+D` — EOT
+
+`Ctrl+C` is forwarded to the Flipper as 0x03 so you can interrupt a running
+remote command without killing the local client.
+
+**Environment variables:**
+- `CLIPPER_SCAN_DEBUG=1` — dump every BLE peripheral seen during scan (useful when troubleshooting "device not found").
+
+## Known limitations
+
+- **Slow disconnect detection on macOS.** When the plugin exits without
+  sending a graceful link-layer termination (which happens any time the
+  user presses Back), macOS / CoreBluetooth / `btleplug` can take many
+  seconds to surface the disconnect. The reconnect loop kicks in once it
+  does. Linux/BlueZ does not have this latency.
+- **Advertised name truncates by one byte on stock firmware.** We work
+  around it by also matching by service UUID `0x3081`.
+
+## Development
+
+```
+# rust unit tests + clippy
+cd client
+cargo test
+cargo clippy --all-targets -- -D warnings
+cargo fmt --check
+
+# plugin build (no-flash)
+cd plugin
+ufbt
+
+# hardware integration tests (needs Flipper connected via USB)
+uv run tools/test_reconnect.py
+```
+
+CI runs `cargo fmt`/`clippy`/`test` on the `{ubuntu, macos, windows}-latest` runner matrix and builds the plugin on Ubuntu via `ufbt`.
 
 ## License
 
