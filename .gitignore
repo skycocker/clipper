@@ -9,6 +9,10 @@ plugin/build/
 plugin/.idea/
 plugin/dist/
 
+# Python tooling
+__pycache__/
+*.pyc
+
 # Editor / OS noise
 .DS_Store
 *.swp

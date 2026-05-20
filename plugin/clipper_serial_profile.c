@@ -40,6 +40,12 @@ static void clipper_serial_profile_stop(FuriHalBleProfileBase* base) {
 
 #define CONNECTION_INTERVAL_MIN (0x06)
 #define CONNECTION_INTERVAL_MAX (0x24)
+/* Supervisor timeout, units of 10ms. 200 = 2s. Stock Flipper profile uses 0
+ * (defaults), which means macOS waits ~30s after a peer goes silent before
+ * declaring the link dead. 2s is fast enough that clipper's reconnect kicks
+ * in promptly, and well above the spec minimum (>(1+latency)*conn_int_max*2
+ * = ~113ms with our params). */
+#define CONNECTION_SUPERVISOR_TIMEOUT (200)
 
 static const GapConfig clipper_gap_template = {
     .adv_service =
@@ -57,7 +63,7 @@ static const GapConfig clipper_gap_template = {
         .conn_int_min = CONNECTION_INTERVAL_MIN,
         .conn_int_max = CONNECTION_INTERVAL_MAX,
         .slave_latency = 0,
-        .supervisor_timeout = 0,
+        .supervisor_timeout = CONNECTION_SUPERVISOR_TIMEOUT,
     },
 };
 

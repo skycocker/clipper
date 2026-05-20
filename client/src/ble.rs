@@ -1,12 +1,14 @@
 //! BLE abstraction (`FlipperWriter` trait) and btleplug implementation.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use btleplug::api::{
-    Central, Characteristic, Manager as _, Peripheral as _, ScanFilter, ValueNotification,
-    WriteType,
+    Central, CentralEvent, Characteristic, Manager as _, Peripheral as _, ScanFilter,
+    ValueNotification, WriteType,
 };
 use btleplug::platform::{Adapter, Manager, Peripheral};
 use futures::{Stream, StreamExt};
@@ -16,6 +18,9 @@ use uuid::Uuid;
 /// reuses these so we don't have to redo the GATT layout from scratch.
 pub const SERIAL_RX: Uuid = Uuid::from_u128(0x19ed_82ae_ed21_4c9d_4145_228e_62fe_0000);
 pub const SERIAL_TX: Uuid = Uuid::from_u128(0x19ed_82ae_ed21_4c9d_4145_228e_61fe_0000);
+/// Flow-control char. Read-only from host's POV, side-effect-free, fixed
+/// 4 bytes — perfect cheap liveness probe.
+pub const SERIAL_FLOW_CTRL: Uuid = Uuid::from_u128(0x19ed_82ae_ed21_4c9d_4145_228e_63fe_0000);
 
 /// 16-bit GAP advertising UUID our plugin sets (`0x3081`), expanded to its
 /// 128-bit Bluetooth-Base-UUID form. Matching this is more reliable than
@@ -37,10 +42,16 @@ pub trait FlipperWriter: Send + Sync {
 }
 
 /// btleplug-backed writer — writes bytes to the Flipper serial RX
-/// characteristic with WithResponse semantics.
+/// characteristic with WithResponse semantics. Also owns a watcher task that
+/// subscribes to adapter events and flips `disconnected` when the peripheral
+/// drops, since `Peripheral::is_connected()` doesn't update reactively on
+/// macOS without an active subscription.
 pub struct BleWriter {
     peripheral: Peripheral,
     rx_char: Characteristic,
+    probe_char: Characteristic,
+    disconnected: Arc<AtomicBool>,
+    watcher: Option<tokio::task::JoinHandle<()>>,
 }
 
 #[async_trait]
@@ -53,15 +64,41 @@ impl FlipperWriter for BleWriter {
     }
 
     async fn is_connected(&self) -> bool {
-        self.peripheral.is_connected().await.unwrap_or(false)
+        // Two signals: the event-watcher's atomic flag and a real GATT read.
+        // Known macOS limitation: btleplug's adapter events and the
+        // underlying CoreBluetooth GATT read can take many seconds to
+        // notice a silent peer (peer reset its BLE chip rather than sending
+        // LL_TERMINATE_IND). Our reconnect loop is correct regardless; it
+        // just won't kick in immediately on macOS. Linux/BlueZ surfaces
+        // disconnects much faster.
+        if self.disconnected.load(Ordering::Relaxed) {
+            return false;
+        }
+        let result = tokio::time::timeout(
+            std::time::Duration::from_millis(800),
+            self.peripheral.read(&self.probe_char),
+        )
+        .await;
+        matches!(result, Ok(Ok(_)))
     }
 }
 
 impl BleWriter {
     /// Best-effort cleanup. Errors are swallowed because we're typically on
     /// the way out anyway.
-    pub async fn disconnect(self) {
+    pub async fn disconnect(mut self) {
+        if let Some(h) = self.watcher.take() {
+            h.abort();
+        }
         let _ = self.peripheral.disconnect().await;
+    }
+}
+
+impl Drop for BleWriter {
+    fn drop(&mut self) {
+        if let Some(h) = self.watcher.take() {
+            h.abort();
+        }
     }
 }
 
@@ -104,18 +141,48 @@ pub async fn connect(
         .find(|c| c.uuid == SERIAL_TX)
         .cloned()
         .context("Flipper serial TX characteristic not present")?;
+    let probe_char = chars
+        .iter()
+        .find(|c| c.uuid == SERIAL_FLOW_CTRL)
+        .cloned()
+        .context("Flipper flow-control characteristic not present")?;
 
     peripheral.subscribe(&tx_char).await?;
     let raw_stream = peripheral.notifications().await?;
     let byte_stream: ByteStream = Box::pin(raw_stream.map(|n: ValueNotification| n.value));
 
+    // Watch adapter events for DeviceDisconnected on our peripheral.
+    let disconnected = Arc::new(AtomicBool::new(false));
+    let watcher = spawn_disconnect_watcher(adapter, peripheral.id(), disconnected.clone()).await?;
+
     Ok((
         BleWriter {
             peripheral,
             rx_char,
+            probe_char,
+            disconnected,
+            watcher: Some(watcher),
         },
         byte_stream,
     ))
+}
+
+async fn spawn_disconnect_watcher(
+    adapter: Adapter,
+    target_id: btleplug::platform::PeripheralId,
+    disconnected: Arc<AtomicBool>,
+) -> Result<tokio::task::JoinHandle<()>> {
+    let mut events = adapter.events().await?;
+    Ok(tokio::spawn(async move {
+        while let Some(event) = events.next().await {
+            if let CentralEvent::DeviceDisconnected(id) = event {
+                if id == target_id {
+                    disconnected.store(true, Ordering::Relaxed);
+                    return;
+                }
+            }
+        }
+    }))
 }
 
 async fn find_device(
