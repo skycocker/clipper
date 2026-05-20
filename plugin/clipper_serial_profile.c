@@ -76,7 +76,14 @@ static void clipper_serial_profile_get_config(GapConfig* config, FuriHalBleProfi
     /* Distinguish from stock serial profile's MAC so bond storage entries don't collide. */
     config->mac_address[2] ^= 0x42;
 
-    strlcpy(config->adv_name, "CLIpper", sizeof(config->adv_name));
+    /* gap.c stores adv_name as `<AD_TYPE_COMPLETE_LOCAL_NAME> <name>` with
+     * the type byte at index 0 and the readable name starting at index 1.
+     * Skipping the type byte (using just strlcpy(adv_name, "CLIpper", ...))
+     * makes the first character of the name be interpreted as the AD type,
+     * which is why we previously saw "LIpper" on the wire.
+     * AD_TYPE_COMPLETE_LOCAL_NAME = 0x09 per Bluetooth Core spec. */
+    config->adv_name[0] = (char)0x09;
+    strlcpy(config->adv_name + 1, "CLIpper", sizeof(config->adv_name) - 1);
 }
 
 static const FuriHalBleProfileTemplate clipper_serial_profile_callbacks = {
