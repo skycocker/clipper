@@ -3,10 +3,11 @@ App(
     name="Clipper BLE Shell",
     apptype=FlipperAppType.EXTERNAL,
     entry_point="clipper_app",
-    requires=["gui"],
+    requires=["gui", "bt"],
     stack_size=2 * 1024,
     fap_category="Bluetooth",
     fap_version="0.1",
     fap_description="BLE-attached CLI shell for Flipper Zero",
     fap_author="skycocker",
+    sources=["*.c"],
 )
