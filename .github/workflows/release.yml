@@ -82,11 +82,11 @@ jobs:
         run: cargo build --release
       - name: Package
         working-directory: client
-        shell: bash
+        shell: pwsh
         run: |
-          mkdir -p artifacts
-          cd target/release
-          zip ../../artifacts/clipper-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip clipper.exe
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Compress-Archive -Path target/release/clipper.exe -Force `
+            -DestinationPath "artifacts/clipper-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: clipper-windows

@@ -115,7 +115,9 @@ async fn interactive(args: &Args) -> Result<()> {
         match ble::connect(&args.name, SCAN_TIMEOUT, CONNECT_TIMEOUT, args.debug).await {
             Ok(writer) => {
                 attempt = 0;
-                eprintln!("\nclipper: connected — type to send, Ctrl+] (or Ctrl+\\, Ctrl+D) to exit.\n");
+                eprintln!(
+                    "\nclipper: connected — type to send, Ctrl+] (or Ctrl+\\, Ctrl+D) to exit.\n"
+                );
                 let outcome = async {
                     let notifications = writer.notifications().await?;
                     let _raw = RawModeGuard::new()?;
