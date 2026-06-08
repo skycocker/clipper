@@ -25,9 +25,6 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|| DEFAULT_NAME_FILTER.to_string());
     let debug = env::var("CLIPPER_SCAN_DEBUG").is_ok();
 
-    // Raw mode + restore on every exit path (including panic).
-    let _raw = RawModeGuard::new()?;
-
     // stdin / stdout are created once and reused across reconnects so we
     // don't fight over the underlying file descriptors.
     let mut stdin = tokio::io::stdin();
@@ -35,11 +32,21 @@ async fn main() -> Result<()> {
 
     let mut attempt: u32 = 0;
     let final_result = loop {
+        // NB: stay in COOKED (line) mode during scan/connect so our own
+        // status messages (which end in \n) render normally. Raw mode is
+        // enabled only around the interactive session below — otherwise a
+        // bare \n in raw mode moves down without returning to column 0 and
+        // the output staircases.
         match ble::connect(&name_filter, SCAN_TIMEOUT, CONNECT_TIMEOUT, debug).await {
             Ok((writer, notifications)) => {
                 attempt = 0;
-                eprint!("\r\nclipper: connected — type to send, Ctrl+] (or Ctrl+\\, Ctrl+D) to exit.\r\n\r\n");
-                let outcome = run_session(&mut stdin, &mut stdout, &writer, notifications).await;
+                eprintln!("\nclipper: connected — type to send, Ctrl+] (or Ctrl+\\, Ctrl+D) to exit.\n");
+                let outcome = {
+                    // Raw mode only for the session; dropped (cooked restored)
+                    // before any reconnect/status messages print.
+                    let _raw = RawModeGuard::new()?;
+                    run_session(&mut stdin, &mut stdout, &writer, notifications).await
+                };
                 writer.disconnect().await;
 
                 match outcome {
