@@ -67,17 +67,20 @@ typedef struct {
 static void clipper_render_callback(Canvas* canvas, void* ctx) {
     ClipperApp* app = ctx;
     canvas_clear(canvas);
+    /* We run on the Window layer (not Fullscreen) so the system status bar —
+     * battery, Bluetooth, and the clock if enabled in Momentum — stays
+     * visible across the top ~13px. Keep our content below that. */
     canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str_aligned(canvas, 64, 12, AlignCenter, AlignTop, "CLIpper");
+    canvas_draw_str_aligned(canvas, 64, 18, AlignCenter, AlignTop, "CLIpper");
     canvas_set_font(canvas, FontSecondary);
     canvas_draw_str_aligned(
-        canvas, 64, 28, AlignCenter, AlignTop,
+        canvas, 64, 33, AlignCenter, AlignTop,
         app->profile_started ? "BLE CLI: ready" : "BLE: failed");
 
     char buf[32];
     snprintf(buf, sizeof(buf), "rx %lu  tx %lu", app->rx_bytes, app->tx_bytes);
-    canvas_draw_str_aligned(canvas, 64, 42, AlignCenter, AlignTop, buf);
-    canvas_draw_str_aligned(canvas, 64, 55, AlignCenter, AlignTop, "Back to exit");
+    canvas_draw_str_aligned(canvas, 64, 45, AlignCenter, AlignTop, buf);
+    canvas_draw_str_aligned(canvas, 64, 56, AlignCenter, AlignTop, "Back to exit");
 }
 
 static void clipper_input_callback(InputEvent* event, void* ctx) {
@@ -204,7 +207,7 @@ int32_t clipper_app(void* p) {
     view_port_draw_callback_set(app->view_port, clipper_render_callback, app);
     view_port_input_callback_set(app->view_port, clipper_input_callback, app);
     app->gui = furi_record_open(RECORD_GUI);
-    gui_add_view_port(app->gui, app->view_port, GuiLayerFullscreen);
+    gui_add_view_port(app->gui, app->view_port, GuiLayerWindow);
 
     app->bt = furi_record_open(RECORD_BT);
     /* Mirror the HID app's bring-up exactly: drop any existing connection,
