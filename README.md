@@ -243,6 +243,3 @@ CI runs `cargo fmt`/`clippy`/`test` on the `{ubuntu, macos, windows}-latest` run
 ## License
 
 **GPL-3.0-or-later** — see [LICENSE](LICENSE), © [skycocker](https://github.com/skycocker).
-Copyleft fits here: the Flipper firmware clipper's plugin builds on (OFW and
-Momentum) is itself GPLv3, and the Rust client's dependencies (MIT/Apache-2.0)
-are compatible. Fork it, ship it, build on it — just keep derivatives open.

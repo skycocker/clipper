@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#fdf6e3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#002b36" media="(prefers-color-scheme: dark)">
 <script>document.documentElement.className+=' js'</script>
 <title>clipper — the Flipper Zero CLI over Bluetooth (wireless terminal)</title>
 <meta name="description" content="clipper gives you the Flipper Zero's full command line over Bluetooth — a wireless terminal for nfc, subghz, rfid and storage. Open-source Flipper plugin + a small macOS/Linux/Windows client. Like screen /dev/cu.usbmodem*, but cordless. A modern flipwire alternative.">
@@ -62,7 +64,7 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Spline+Sans+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
     /* Solarized Light — matches the logo's cream palette */
@@ -80,8 +82,36 @@
     --amber:#b58900;    /* solarized yellow */
     --red:#dc322f;      /* solarized red */
     --cyan:#2aa198;
-    --mono:'Spline Sans Mono',ui-monospace,Menlo,monospace;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
     --pixel:var(--mono);  /* was a pixel font; now just the clean mono */
+  }
+  /* Solarized Dark — follows the browser/system theme */
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#002b36;       /* base03 — paper */
+      --bg2:#073642;      /* base02 — panel */
+      --panel:#083845;
+      --panel2:#0a3f4d;
+      --line:#0e4a59;     /* soft rule */
+      --ink:#93a1a1;      /* base1 — primary text */
+      --bright:#fdf6e3;   /* base3 — headings */
+      --muted:#839496;    /* base0 — secondary text */
+      --green:#859900;
+      --green-soft:#a6b916;
+      --green-dim:#5d6f12;
+      --amber:#cb9a1a;
+      --red:#dc322f;
+      --cyan:#2aa198;
+    }
+    header.nav{
+      background:linear-gradient(to bottom,rgba(0,43,54,.92),rgba(0,43,54,.72));
+    }
+    body::before{
+      background:
+        radial-gradient(900px 520px at 50% -10%, rgba(133,153,0,.14), transparent 60%),
+        radial-gradient(700px 700px at 94% 6%, rgba(181,137,0,.08), transparent 60%),
+        var(--bg);
+    }
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
@@ -132,7 +162,8 @@
     font-size:clamp(46px,11vw,96px);line-height:.92;letter-spacing:1px;
     color:var(--bright)}
   h1.word .blink{color:var(--amber)}
-  .tag{font-size:clamp(17px,2.6vw,22px);color:var(--green-soft);margin:20px auto 0;max-width:24ch;font-weight:500}
+  .tag{font-size:clamp(15px,2.2vw,22px);color:var(--green-soft);margin:20px auto 0;max-width:none;font-weight:500;white-space:nowrap}
+  @media(max-width:560px){.tag{white-space:normal}}
   .sub{color:var(--muted);max-width:60ch;margin:16px auto 0;font-size:15px}
   .sub code{color:var(--ink);background:var(--panel);border:1px solid var(--line);
     padding:1px 6px;border-radius:5px;font-size:13px}
@@ -277,6 +308,7 @@
     <a class="brand" href="#top"><svg><use href="#logo"/></svg>clipper</a>
     <span class="spacer"></span>
     <a class="navlink" href="#features">features</a>
+    <a class="navlink" href="#why">why</a>
     <a class="navlink" href="#how">how</a>
     <a class="navlink" href="#install">install</a>
     <a class="ghbtn" href="https://github.com/skycocker/clipper">GitHub ↗</a>
@@ -288,15 +320,15 @@
   <div class="wrap">
     <svg class="glyph reveal" style="animation-delay:.02s"><use href="#logo"/></svg>
     <h1 class="word reveal" style="animation-delay:.08s">clipper<span class="blink">_</span></h1>
-    <p class="tag reveal" style="animation-delay:.16s">Your Flipper Zero's command line — over Bluetooth.</p>
+    <p class="tag reveal" style="animation-delay:.16s">your Flipper Zero's command line — over Bluetooth.</p>
     <p class="sub reveal" style="animation-delay:.24s">
       Like <code>screen /dev/cu.usbmodem*</code>, but cordless. A tiny Flipper plugin
       exposes the full CLI over Bluetooth&nbsp;LE; a small client on your computer gives
       you a real terminal — <code>nfc</code>, <code>subghz</code>, <code>storage</code>, the lot.
     </p>
     <div class="cta reveal" style="animation-delay:.32s">
-      <a class="btn primary" href="https://github.com/skycocker/clipper/releases/latest">Get clipper</a>
-      <a class="btn ghost" href="https://github.com/skycocker/clipper">Read the source ↗</a>
+      <a class="btn primary" href="https://github.com/skycocker/clipper/releases/latest">start clipping</a>
+      <a class="btn ghost" href="https://github.com/skycocker/clipper">read the source ↗</a>
     </div>
 
     <div class="term reveal" style="animation-delay:.42s">
@@ -323,29 +355,29 @@
 <section id="features">
   <div class="wrap">
     <p class="kicker">what it is</p>
-    <h2>A real Flipper terminal, snipped free of the cable.</h2>
+    <h2>a real Flipper terminal, snipped free of the cable.</h2>
     <p class="lead">The Flipper Zero has a great command line. Over USB. clipper gives you the
       same prompt over the air — same commands, same sub-shells, nothing dumbed down.</p>
     <div class="grid">
       <div class="card">
         <span class="ic">&gt;_ ✂</span>
-        <h3>Cordless</h3>
+        <h3>cordless</h3>
         <p>The full Flipper CLI over Bluetooth&nbsp;LE. Leave the USB cable in the drawer.</p>
       </div>
       <div class="card">
         <span class="ic">∀ dev</span>
-        <h3>Any Flipper</h3>
+        <h3>any Flipper</h3>
         <p>Matches the plugin's advertisement, not your device's name. Pairs once, reconnects silently.</p>
       </div>
       <div class="card">
         <span class="ic">[nfc]</span>
-        <h3>Real sub-shells</h3>
+        <h3>real sub-shells</h3>
         <p><code>nfc</code>, <code>subghz</code>, <code>rfid</code>, <code>storage</code>… interactive
           prompts and on-demand external commands, exactly like over USB.</p>
       </div>
       <div class="card">
         <span class="ic">⌘ / 🐧</span>
-        <h3>Cross-platform</h3>
+        <h3>cross-platform</h3>
         <p>One small Rust binary. macOS (tested), Linux (verified), Windows (experimental).</p>
       </div>
     </div>
@@ -354,10 +386,23 @@
 
 <hr class="hr">
 
+<section id="why">
+  <div class="wrap">
+    <p class="kicker">why?</p>
+    <p class="lead">didn't you ever want to actually use your flipper to do something apart
+      from replaying your neighbour's keyfob? also, it's not exactly the most practical thing
+      in the world to line up a 20-metre usb wire to your laptop in front of the security guard.
+      joking, of course. also — much easier to let claude code execute
+      <s>fuzzy scanning</s> reasoning using the device.</p>
+  </div>
+</section>
+
+<hr class="hr">
+
 <section id="how">
   <div class="wrap">
     <p class="kicker">how it works</p>
-    <h2>Two halves, one prompt.</h2>
+    <h2>two halves, one prompt.</h2>
     <p class="lead">A Flipper plugin reroutes the BLE serial endpoint into a genuine CLI
       shell; the client bridges your terminal to it. Bytes in, bytes out — that's the whole trick.</p>
     <div class="diagram">
@@ -386,12 +431,12 @@
 <section id="install">
   <div class="wrap">
     <p class="kicker">install</p>
-    <h2>Up and running in two snips.</h2>
+    <h2>up and running in two snips.</h2>
 
     <div class="step">
       <div class="num">1</div>
       <div class="body">
-        <h3>Put the plugin on the Flipper</h3>
+        <h3>put the plugin on the Flipper</h3>
         <p class="lead">Grab <code>clipper-&lt;version&gt;.fap</code> from
           <a href="https://github.com/skycocker/clipper/releases/latest">Releases</a>, drop it on the
           SD card at <code>/ext/apps/Bluetooth/</code> (via qFlipper or the mobile app), then launch it
@@ -403,7 +448,7 @@
     <div class="step">
       <div class="num">2</div>
       <div class="body">
-        <h3>Run the client</h3>
+        <h3>run the client</h3>
         <div class="codeblock">
           <button class="copy" data-copy="tar -xzf clipper-*-apple-darwin.tar.gz
 xattr -dr com.apple.quarantine ./clipper
@@ -435,37 +480,37 @@ xattr -dr com.apple.quarantine ./clipper
 <section id="faq">
   <div class="wrap">
     <p class="kicker">questions</p>
-    <h2>Things people ask before downloading.</h2>
+    <h2>things people ask before downloading.</h2>
 
     <div class="grid" style="grid-template-columns:1fr">
       <div class="card">
-        <h3>How do I get the Flipper Zero CLI over Bluetooth?</h3>
+        <h3>how do I get the Flipper Zero CLI over Bluetooth?</h3>
         <p>Run the clipper plugin on the Flipper, then run the clipper client on your computer.
           It pairs over Bluetooth&nbsp;LE and drops you at the Flipper's normal <code>&gt;:</code> prompt —
           wirelessly. Everything the USB CLI does, clipper does: <code>nfc</code>, <code>subghz</code>,
           <code>rfid</code>, <code>storage</code>, the interactive sub-shells, all of it.</p>
       </div>
       <div class="card">
-        <h3>Isn't this just flipwire?</h3>
+        <h3>isn't this just flipwire?</h3>
         <p>Same idea — talk to the Flipper over Bluetooth — but where flipwire fires one-shot file
           commands, clipper gives you the <b>full interactive shell</b>. And clipper is built and tested
           on macOS, where flipwire's Bluetooth scan doesn't find the device. If you searched
           "flipwire macOS" and hit a wall, this is for you.</p>
       </div>
       <div class="card">
-        <h3>Does it run on my OS?</h3>
+        <h3>does it run on my OS?</h3>
         <p>macOS (Apple&nbsp;Silicon&nbsp;&amp;&nbsp;Intel) is the tested primary target. Linux x86_64 is
           build- and BLE-scan-verified. Windows compiles in CI and is experimental — reports welcome.
           One small Rust binary, no runtime to install.</p>
       </div>
       <div class="card">
-        <h3>Which firmware do I need? Is Momentum required?</h3>
+        <h3>which firmware do I need? is Momentum required?</h3>
         <p>Any firmware with the modern CLI-shell API. Verified on <b>Momentum mntm-012</b> and
           <b>official 1.4.x</b>. The plugin is open source, so if your firmware's API differs you can
           rebuild it with <code>ufbt</code> in seconds.</p>
       </div>
       <div class="card">
-        <h3>Is it safe / does it need root or a phone app?</h3>
+        <h3>is it safe / does it need root or a phone app?</h3>
         <p>No phone app, no root. It's a standard BLE pairing (6-digit numeric comparison, confirmed on
           both ends once). The plugin reuses the Flipper's own serial GATT service; the client is a plain
           userspace binary. All open source under the GPL — read every line.</p>
@@ -483,7 +528,7 @@ xattr -dr com.apple.quarantine ./clipper
       <a href="https://github.com/skycocker/clipper#readme">Docs</a> ·
       <a href="https://github.com/skycocker/clipper/blob/main/LICENSE">GPL-3.0</a>
     </div>
-    <p class="fine">Open source under the GPL-3.0-or-later. Not affiliated with Flipper Devices or Momentum.</p>
+    <p class="fine">Built by <a href="https://github.com/skycocker">skycocker</a>. Open source under the GPL-3.0-or-later. Not affiliated with Flipper Devices or Momentum.</p>
   </div>
 </footer>
 
