@@ -40,7 +40,7 @@ typedef struct {
     CliRegistry* cli_registry;
     PipeSide* own_pipe;   /* we read shell-stdout from here, write BLE-stdin here */
     PipeSide* shell_pipe; /* shell owns this end */
-    CliShell* shell;
+    FuriThread* shell_supervisor; /* (re)spawns the CLI shell — see below */
     FuriThread* bridge_thread;
     FuriEventLoop* bridge_loop;
 
@@ -173,6 +173,25 @@ static const CliCommandExternalConfig clipper_cli_ext_config = {
     .appid = "cli",
 };
 
+/* Shell supervisor: owns the CLI shell's lifecycle for the life of the app.
+ * A cli_shell exits when the user types `exit` (or the pipe breaks). Without
+ * this, typing `exit` would kill the only shell and leave the BLE client
+ * talking to nothing ("stuck"). Here we simply re-spawn a fresh shell after
+ * each exit — so `exit` drops the user back to a new prompt, just like
+ * reopening a serial console. The loop ends only when our pipe end is freed
+ * at teardown (pipe goes Broken), which also makes the running shell exit. */
+static int32_t clipper_shell_supervisor(void* context) {
+    ClipperApp* app = context;
+    while(pipe_state(app->shell_pipe) != PipeStateBroken) {
+        CliShell* shell = cli_shell_alloc(
+            clipper_cli_motd, app, app->shell_pipe, app->cli_registry, &clipper_cli_ext_config);
+        cli_shell_start(shell);
+        cli_shell_join(shell); /* blocks until `exit` or broken pipe */
+        cli_shell_free(shell);
+    }
+    return 0;
+}
+
 /* ------------ Lifecycle ------------ */
 
 int32_t clipper_app(void* p) {
@@ -208,9 +227,11 @@ int32_t clipper_app(void* p) {
         PipeSideBundle bundle = pipe_alloc(CLIPPER_PIPE_CAPACITY, 1);
         app->own_pipe = bundle.alices_side;
         app->shell_pipe = bundle.bobs_side;
-        app->shell = cli_shell_alloc(
-            clipper_cli_motd, app, app->shell_pipe, app->cli_registry, &clipper_cli_ext_config);
-        cli_shell_start(app->shell);
+        /* Supervisor (re)spawns the shell so `exit` yields a fresh prompt
+         * instead of a dead session. */
+        app->shell_supervisor = furi_thread_alloc_ex(
+            "ClipperShellSup", 1024, clipper_shell_supervisor, app);
+        furi_thread_start(app->shell_supervisor);
         app->bridge_thread = furi_thread_alloc_ex(
             "ClipperBridge", 2048, clipper_bridge_thread, app);
         furi_thread_start(app->bridge_thread);
@@ -238,15 +259,17 @@ int32_t clipper_app(void* p) {
     /* Shutdown order — must be careful about who owns what when:
      *   1. Stop the BLE -> shell path (no more incoming data), then drop the
      *      connection and let core2 settle (mirrors the HID app teardown).
-     *   2. Tell the bridge event loop to stop and join its thread. The
-     *      bridge thread detaches own_pipe from its loop on the way out, so
-     *      we MUST NOT free own_pipe before the thread joins.
-     *   3. Now safe to free our pipe end; this makes the shell's pipe go
-     *      broken, so its thread will exit on the next read.
-     *   4. Join + free the shell.
-     *   5. Restore the default keys path + BT profile (frees our
-     *      BleServiceSerial), so the device returns to its normal M3l0
-     *      serial profile + main bond store. */
+     *   2. Stop the bridge event loop and join its thread. The bridge thread
+     *      detaches own_pipe from its loop on the way out, so we MUST NOT
+     *      free own_pipe before the thread joins.
+     *   3. Free our pipe end -> shell_pipe goes Broken. That makes the
+     *      currently-running shell exit AND makes the supervisor's respawn
+     *      loop terminate instead of starting another shell.
+     *   4. Join + free the supervisor (its last shell has now exited).
+     *   5. Free shell_pipe + tx_ack, close RECORD_CLI.
+     *   6. Restore the default keys path + BT profile (frees our
+     *      BleServiceSerial), returning the device to its normal serial
+     *      profile + main bond store. */
     if(app->profile_started) {
         ble_svc_serial_set_callbacks(app->serial, 0, NULL, NULL);
         bt_disconnect(app->bt);
@@ -260,12 +283,13 @@ int32_t clipper_app(void* p) {
         furi_thread_free(app->bridge_thread);
 
         if(app->own_pipe) {
-            pipe_free(app->own_pipe);
+            pipe_free(app->own_pipe); /* -> shell_pipe Broken */
             app->own_pipe = NULL;
         }
 
-        cli_shell_join(app->shell);
-        cli_shell_free(app->shell);
+        furi_thread_join(app->shell_supervisor);
+        furi_thread_free(app->shell_supervisor);
+
         pipe_free(app->shell_pipe);
         furi_semaphore_free(app->tx_ack);
 
