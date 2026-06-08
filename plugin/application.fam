@@ -9,5 +9,6 @@ App(
     fap_version="0.1",
     fap_description="BLE-attached CLI shell for Flipper Zero",
     fap_author="skycocker",
+    fap_icon="clipper_icon.png",
     sources=["*.c"],
 )
