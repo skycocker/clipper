@@ -3,8 +3,9 @@ name = "clipper"
 version = "0.1.0"
 edition = "2021"
 description = "Interactive Flipper Zero CLI shell over Bluetooth"
-license = "MIT"
+license = "GPL-3.0-or-later"
 repository = "https://github.com/skycocker/clipper"
+homepage = "https://skycocker.github.io/clipper/"
 
 [dependencies]
 anyhow = "1"

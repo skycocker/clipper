@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>document.documentElement.className+=' js'</script>
+<title>clipper — the Flipper Zero CLI over Bluetooth (wireless terminal)</title>
+<meta name="description" content="clipper gives you the Flipper Zero's full command line over Bluetooth — a wireless terminal for nfc, subghz, rfid and storage. Open-source Flipper plugin + a small macOS/Linux/Windows client. Like screen /dev/cu.usbmodem*, but cordless. A modern flipwire alternative.">
+<meta name="keywords" content="Flipper Zero, CLI, command line, Bluetooth, BLE, wireless terminal, serial, nfc, subghz, Momentum, flipwire, qFlipper, GATT, cordless">
+<meta name="author" content="skycocker">
+<link rel="canonical" href="https://skycocker.github.io/clipper/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://skycocker.github.io/clipper/">
+<meta property="og:site_name" content="clipper">
+<meta property="og:title" content="clipper — the Flipper Zero CLI over Bluetooth">
+<meta property="og:description" content="Your Flipper's full command line, cordless. nfc · subghz · storage over BLE. Open-source plugin + a small cross-platform client.">
+<meta property="og:image" content="https://skycocker.github.io/clipper/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="clipper — the Flipper Zero CLI over Bluetooth">
+<meta name="twitter:description" content="Your Flipper's full command line, cordless. nfc · subghz · storage over BLE.">
+<meta name="twitter:image" content="https://skycocker.github.io/clipper/og.png">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "clipper",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "macOS, Linux, Windows",
+      "description": "Access the Flipper Zero's full command-line interface over Bluetooth Low Energy. A Flipper plugin exposes the CLI over BLE; a small cross-platform client gives you a real wireless terminal.",
+      "url": "https://skycocker.github.io/clipper/",
+      "downloadUrl": "https://github.com/skycocker/clipper/releases/latest",
+      "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+      "isAccessibleForFree": true,
+      "author": {"@type": "Person", "name": "skycocker"},
+      "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {"@type":"Question","name":"How do I access the Flipper Zero CLI over Bluetooth?",
+         "acceptedAnswer":{"@type":"Answer","text":"Run the clipper plugin on the Flipper, then run the clipper client on your computer. It pairs over Bluetooth LE and gives you the Flipper's normal command-line prompt wirelessly — including nfc, subghz, rfid and storage sub-shells."}},
+        {"@type":"Question","name":"Is clipper a flipwire alternative?",
+         "acceptedAnswer":{"@type":"Answer","text":"Yes. Like flipwire it talks to the Flipper over Bluetooth, but instead of one-shot file commands clipper gives you the full interactive CLI shell, and it is tested on macOS where flipwire's Bluetooth scanning did not work."}},
+        {"@type":"Question","name":"Which operating systems does clipper support?",
+         "acceptedAnswer":{"@type":"Answer","text":"macOS (Apple Silicon and Intel) is the tested primary target. Linux x86_64 is build- and BLE-scan-verified. Windows builds are experimental."}},
+        {"@type":"Question","name":"Does clipper need Momentum firmware?",
+         "acceptedAnswer":{"@type":"Answer","text":"No special firmware is required beyond one that ships the modern CLI shell API. It is verified on Momentum mntm-012 and official firmware 1.4.x. The plugin is open source so you can rebuild it for your firmware."}}
+      ]
+    }
+  ]
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Spline+Sans+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0c08;
+    --bg2:#0e1109;
+    --panel:#12160d;
+    --panel2:#161b0f;
+    --line:#2a3718;
+    --ink:#dde7cb;
+    --muted:#869371;
+    --green:#9ee84f;
+    --green-soft:#c7f06a;
+    --green-dim:#5f7a36;
+    --amber:#ff9b3d;
+    --red:#ff6f5e;
+    --mono:'Spline Sans Mono',ui-monospace,Menlo,monospace;
+    --pixel:'Silkscreen',var(--mono);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--mono);
+    font-size:16px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  /* phosphor atmosphere: radial glow + scanlines + grain */
+  body::before{
+    content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
+    background:
+      radial-gradient(900px 500px at 50% -8%, rgba(158,232,79,.16), transparent 60%),
+      radial-gradient(700px 700px at 92% 8%, rgba(255,155,61,.07), transparent 60%),
+      var(--bg);
+  }
+  body::after{
+    content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.5;
+    background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.18) 2px 3px);
+    mix-blend-mode:multiply;
+  }
+  a{color:var(--green);text-decoration:none}
+  a:hover{color:var(--green-soft)}
+  ::selection{background:rgba(158,232,79,.28);color:#fff}
+
+  .wrap{max-width:920px;margin:0 auto;padding:0 24px}
+
+  /* ---- top bar ---- */
+  header.nav{position:sticky;top:0;z-index:10;backdrop-filter:blur(8px);
+    background:linear-gradient(to bottom,rgba(10,12,8,.92),rgba(10,12,8,.66));
+    border-bottom:1px solid var(--line)}
+  .nav .wrap{display:flex;align-items:center;gap:14px;height:62px}
+  .brand{display:flex;align-items:center;gap:11px;font-family:var(--pixel);
+    font-size:18px;color:var(--ink);letter-spacing:.5px}
+  .brand svg{width:30px;height:30px;display:block}
+  .brand b{color:var(--green)}
+  .nav .spacer{flex:1}
+  .nav a.navlink{color:var(--muted);font-size:13px;letter-spacing:.4px}
+  .nav a.navlink:hover{color:var(--ink)}
+  .nav .ghbtn{border:1px solid var(--green-dim);color:var(--ink);padding:7px 14px;border-radius:8px;font-size:13px}
+  .nav .ghbtn:hover{border-color:var(--green);background:rgba(158,232,79,.08)}
+
+  /* ---- hero ---- */
+  .hero{padding:74px 0 36px;text-align:center}
+  .hero .glyph{width:128px;height:128px;margin:0 auto 26px;display:block;
+    filter:drop-shadow(0 0 26px rgba(158,232,79,.35))}
+  h1.word{font-family:var(--pixel);font-weight:700;margin:0;
+    font-size:clamp(46px,11vw,96px);line-height:.92;letter-spacing:1px;
+    color:var(--ink);text-shadow:0 0 30px rgba(158,232,79,.25)}
+  h1.word .blink{color:var(--amber);animation:blink 1.1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .tag{font-size:clamp(17px,2.6vw,22px);color:var(--green-soft);margin:20px auto 0;max-width:24ch;font-weight:500}
+  .sub{color:var(--muted);max-width:60ch;margin:16px auto 0;font-size:15px}
+  .sub code{color:var(--ink);background:var(--panel);border:1px solid var(--line);
+    padding:1px 6px;border-radius:5px;font-size:13px}
+  .cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:30px}
+  .btn{font-family:var(--mono);font-weight:600;font-size:15px;padding:13px 24px;border-radius:10px;
+    border:1px solid transparent;cursor:pointer;transition:transform .08s ease,box-shadow .2s ease}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:var(--green);color:#0a0c08;box-shadow:0 0 0 rgba(158,232,79,.5)}
+  .btn.primary:hover{box-shadow:0 6px 30px rgba(158,232,79,.35);color:#0a0c08}
+  .btn.ghost{background:transparent;color:var(--ink);border-color:var(--green-dim)}
+  .btn.ghost:hover{border-color:var(--green);background:rgba(158,232,79,.07)}
+
+  /* ---- terminal demo ---- */
+  .term{max-width:680px;margin:46px auto 0;text-align:left;border:1px solid var(--line);
+    border-radius:14px;background:linear-gradient(180deg,var(--panel2),var(--panel));
+    box-shadow:0 30px 80px -30px rgba(0,0,0,.9),inset 0 0 60px rgba(158,232,79,.03);overflow:hidden}
+  .term .bar{display:flex;align-items:center;gap:8px;padding:11px 15px;border-bottom:1px solid var(--line);
+    background:rgba(0,0,0,.25)}
+  .dot{width:11px;height:11px;border-radius:50%}
+  .dot.g{background:var(--green)}.dot.a{background:var(--amber)}.dot.m{background:#3f5424}
+  .term .bar .ttl{margin-left:8px;color:var(--muted);font-size:12px;letter-spacing:.5px}
+  .term pre{margin:0;padding:20px 20px 24px;font-size:14px;line-height:1.85;white-space:pre-wrap;
+    color:var(--ink);overflow-x:auto}
+  .term .p{color:var(--green)}        /* prompt */
+  .term .np{color:var(--amber)}       /* nfc prompt */
+  .term .o{color:var(--muted)}        /* output */
+  .term .cmd{color:var(--ink)}
+  .term .cur{display:inline-block;width:9px;height:17px;background:var(--green);
+    transform:translateY(3px);animation:blink 1.1s steps(1) infinite}
+
+  /* reveal */
+  /* Progressive enhancement: content is visible by default. Only when JS runs
+     (html.js) do we hide-then-animate — so crawlers, no-JS, and reduced-motion
+     users always see everything. */
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  html.js .reveal{animation:rise .7s cubic-bezier(.2,.7,.2,1) backwards}
+  @media (prefers-reduced-motion: reduce){
+    html.js .reveal{animation:none}
+    .blink,.cur{animation:none}
+  }
+
+  /* ---- section scaffolding ---- */
+  section{padding:64px 0}
+  .kicker{font-family:var(--pixel);font-size:12px;color:var(--green);letter-spacing:1px;
+    text-transform:uppercase;margin:0 0 10px}
+  h2{font-family:var(--mono);font-weight:700;font-size:clamp(24px,4vw,33px);margin:0 0 8px;letter-spacing:-.4px}
+  section p.lead{color:var(--muted);max-width:62ch;margin:0 0 8px}
+  .hr{height:1px;background:linear-gradient(to right,transparent,var(--line),transparent);border:0;margin:0}
+
+  /* features */
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:30px}
+  .card{border:1px solid var(--line);border-radius:13px;padding:22px;background:var(--panel);
+    transition:border-color .2s ease,transform .2s ease,box-shadow .2s ease;position:relative}
+  .card:hover{border-color:var(--green-dim);transform:translateY(-3px);box-shadow:0 18px 40px -28px rgba(158,232,79,.5)}
+  .card .ic{font-family:var(--pixel);color:var(--green);font-size:15px;margin-bottom:12px;display:block}
+  .card h3{margin:0 0 6px;font-size:17px;letter-spacing:-.2px}
+  .card p{margin:0;color:var(--muted);font-size:14px}
+
+  /* how it works */
+  .diagram{margin-top:26px;border:1px solid var(--line);border-radius:13px;background:var(--panel);
+    padding:24px;overflow-x:auto}
+  .diagram pre{margin:0;color:var(--green-soft);font-size:13px;line-height:1.5}
+  .diagram .lbl{color:var(--muted)}
+
+  /* install steps */
+  .step{display:flex;gap:18px;margin-top:26px;align-items:flex-start}
+  .step .num{flex:0 0 auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--green-dim);
+    color:var(--green);display:grid;place-items:center;font-family:var(--pixel);font-size:14px;margin-top:2px}
+  .step .body{flex:1;min-width:0}
+  .step h3{margin:2px 0 10px;font-size:18px}
+  .codeblock{position:relative;border:1px solid var(--line);border-radius:11px;background:#070906;overflow:hidden}
+  .codeblock pre{margin:0;padding:16px 46px 16px 16px;font-size:13.5px;line-height:1.7;
+    color:var(--ink);white-space:pre;overflow-x:auto}
+  .codeblock .cm{color:var(--muted)}
+  .codeblock .gr{color:var(--green)}
+  .copy{position:absolute;top:9px;right:9px;border:1px solid var(--line);background:var(--panel2);
+    color:var(--muted);border-radius:7px;font-family:var(--mono);font-size:11px;padding:5px 9px;cursor:pointer}
+  .copy:hover{color:var(--ink);border-color:var(--green-dim)}
+  .copy.ok{color:var(--green);border-color:var(--green)}
+
+  /* note */
+  .note{border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:0 12px 12px 0;
+    background:var(--panel);padding:20px 22px;margin-top:24px;color:var(--muted);font-size:14.5px}
+  .note b{color:var(--ink)}
+  .note .em{color:var(--amber)}
+
+  /* footer */
+  footer{border-top:1px solid var(--line);padding:40px 0 60px;color:var(--muted);font-size:13px;text-align:center}
+  footer .brand{justify-content:center;margin-bottom:14px;font-size:15px}
+  footer a{color:var(--muted)}footer a:hover{color:var(--green)}
+  footer .fine{margin-top:14px;font-size:12px;opacity:.75;max-width:60ch;margin-left:auto;margin-right:auto}
+
+  @media (max-width:680px){
+    .grid{grid-template-columns:1fr}
+    .nav a.navlink{display:none}
+    .hero{padding:48px 0 24px}
+  }
+</style>
+</head>
+<body>
+
+<!-- reusable logo symbol -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="logo" viewBox="0 0 240 240">
+    <rect x="20" y="20" width="200" height="200" rx="30" fill="#10140c" stroke="#5f7a36" stroke-width="5"/>
+    <line x1="20" y1="58" x2="220" y2="58" stroke="#2b3a18" stroke-width="3"/>
+    <circle cx="44" cy="39" r="6" fill="#7fd13b"/>
+    <circle cx="66" cy="39" r="6" fill="#3f5424"/>
+    <circle cx="88" cy="39" r="6" fill="#3f5424"/>
+    <g stroke="#9ee84f" stroke-width="15" stroke-linecap="round" fill="none">
+      <path d="M70 96 L150 138"/>
+      <path d="M70 180 L150 138"/>
+    </g>
+    <circle cx="64" cy="92" r="13" fill="none" stroke="#7fd13b" stroke-width="9"/>
+    <circle cx="64" cy="184" r="13" fill="none" stroke="#7fd13b" stroke-width="9"/>
+    <circle cx="118" cy="138" r="9" fill="#10140c" stroke="#c7f06a" stroke-width="6"/>
+    <rect x="165" y="150" width="34" height="16" rx="3" fill="#ff9b3d"/>
+  </symbol>
+</svg>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><svg><use href="#logo"/></svg>clip<b>per</b></a>
+    <span class="spacer"></span>
+    <a class="navlink" href="#features">features</a>
+    <a class="navlink" href="#how">how</a>
+    <a class="navlink" href="#install">install</a>
+    <a class="ghbtn" href="https://github.com/skycocker/clipper">GitHub ↗</a>
+  </div>
+</header>
+
+<a id="top"></a>
+<section class="hero">
+  <div class="wrap">
+    <svg class="glyph reveal" style="animation-delay:.02s"><use href="#logo"/></svg>
+    <h1 class="word reveal" style="animation-delay:.08s">clipper<span class="blink">_</span></h1>
+    <p class="tag reveal" style="animation-delay:.16s">Your Flipper Zero's command line — over Bluetooth.</p>
+    <p class="sub reveal" style="animation-delay:.24s">
+      Like <code>screen /dev/cu.usbmodem*</code>, but cordless. A tiny Flipper plugin
+      exposes the full CLI over Bluetooth&nbsp;LE; a small client on your computer gives
+      you a real terminal — <code>nfc</code>, <code>subghz</code>, <code>storage</code>, the lot.
+    </p>
+    <div class="cta reveal" style="animation-delay:.32s">
+      <a class="btn primary" href="https://github.com/skycocker/clipper/releases/latest">Get clipper</a>
+      <a class="btn ghost" href="https://github.com/skycocker/clipper">Read the source ↗</a>
+    </div>
+
+    <div class="term reveal" style="animation-delay:.42s">
+      <div class="bar">
+        <span class="dot g"></span><span class="dot a"></span><span class="dot m"></span>
+        <span class="ttl">clipper — bluetooth</span>
+      </div>
+<pre><span class="o">$</span> <span class="cmd">clipper</span>
+<span class="o">clipper: scanning for "CLIpper"...</span>
+<span class="o">clipper: connected — type to send, Ctrl+] to exit.</span>
+
+<span class="p">&gt;:</span> <span class="cmd">nfc</span>
+<span class="np">[nfc]&gt;:</span> <span class="cmd">scanner</span>
+<span class="o">Protocols detected: Iso14443-4a</span>
+<span class="np">[nfc]&gt;:</span> <span class="cmd">storage list /ext</span>
+<span class="o">[D] nfc  subghz  infrared  lfrfid  badusb  ...</span>
+<span class="np">[nfc]&gt;:</span> <span class="cur"></span></pre>
+    </div>
+    <p class="sub" style="margin-top:22px">No cable. No phone app. Just a prompt. Cool, huh?</p>
+  </div>
+</section>
+
+<hr class="hr">
+
+<section id="features">
+  <div class="wrap">
+    <p class="kicker">what it is</p>
+    <h2>A real Flipper terminal, snipped free of the cable.</h2>
+    <p class="lead">The Flipper Zero has a great command line. Over USB. clipper gives you the
+      same prompt over the air — same commands, same sub-shells, nothing dumbed down.</p>
+    <div class="grid">
+      <div class="card">
+        <span class="ic">&gt;_ ✂</span>
+        <h3>Cordless</h3>
+        <p>The full Flipper CLI over Bluetooth&nbsp;LE. Leave the USB cable in the drawer.</p>
+      </div>
+      <div class="card">
+        <span class="ic">∀ dev</span>
+        <h3>Any Flipper</h3>
+        <p>Matches the plugin's advertisement, not your device's name. Pairs once, reconnects silently.</p>
+      </div>
+      <div class="card">
+        <span class="ic">[nfc]</span>
+        <h3>Real sub-shells</h3>
+        <p><code>nfc</code>, <code>subghz</code>, <code>rfid</code>, <code>storage</code>… interactive
+          prompts and on-demand external commands, exactly like over USB.</p>
+      </div>
+      <div class="card">
+        <span class="ic">⌘ / 🐧</span>
+        <h3>Cross-platform</h3>
+        <p>One small Rust binary. macOS (tested), Linux (verified), Windows (experimental).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="hr">
+
+<section id="how">
+  <div class="wrap">
+    <p class="kicker">how it works</p>
+    <h2>Two halves, one prompt.</h2>
+    <p class="lead">A Flipper plugin reroutes the BLE serial endpoint into a genuine CLI
+      shell; the client bridges your terminal to it. Bytes in, bytes out — that's the whole trick.</p>
+    <div class="diagram">
+<pre>   your computer                the air               your flipper
+ ┌───────────────┐                                 ┌────────────────┐
+ │   clipper     │   ((·   Bluetooth LE   ·))       │  CLIpper .fap  │
+ │   (client)    │ &lt;══════════════════════════════&gt; │   → cli_shell  │
+ └───────────────┘     GATT serial  ⇄  pipe         └────────────────┘
+   <span class="lbl">raw-mode tty</span>                                      <span class="lbl">nfc · subghz · …</span></pre>
+    </div>
+  </div>
+</section>
+
+<hr class="hr">
+
+<section id="install">
+  <div class="wrap">
+    <p class="kicker">install</p>
+    <h2>Up and running in two snips.</h2>
+
+    <div class="step">
+      <div class="num">1</div>
+      <div class="body">
+        <h3>Put the plugin on the Flipper</h3>
+        <p class="lead">Grab <code>clipper-&lt;version&gt;.fap</code> from
+          <a href="https://github.com/skycocker/clipper/releases/latest">Releases</a>, drop it on the
+          SD card at <code>/ext/apps/Bluetooth/</code> (via qFlipper or the mobile app), then launch it
+          from <b>Apps → Bluetooth → CLIpper&nbsp;BLE&nbsp;Shell</b>. The screen reads
+          <code>BLE CLI: ready</code>.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="num">2</div>
+      <div class="body">
+        <h3>Run the client</h3>
+        <div class="codeblock">
+          <button class="copy" data-copy="tar -xzf clipper-*-apple-darwin.tar.gz
+xattr -dr com.apple.quarantine ./clipper
+./clipper">copy</button>
+<pre><span class="cm"># macOS — unsigned binary, clear Gatekeeper once</span>
+tar -xzf clipper-*-apple-darwin.tar.gz
+xattr -dr com.apple.quarantine ./clipper
+./clipper</pre>
+        </div>
+        <p class="lead" style="margin-top:14px">First connect pops a 6-digit numeric-comparison
+          prompt on both the Mac and the Flipper — confirm both. After that it's silent. Then just
+          type:</p>
+        <div class="codeblock">
+          <button class="copy" data-copy="&gt;: nfc">copy</button>
+<pre><span class="gr">&gt;:</span> nfc
+<span class="gr">[nfc]&gt;:</span> scanner
+<span class="gr">&gt;:</span> storage list /ext     <span class="cm"># or anything the Flipper CLI knows</span></pre>
+        </div>
+        <p class="lead" style="margin-top:14px">Exit with <code>Ctrl+]</code>. On Linux, pair first
+          with <code>bluetoothctl pair &lt;addr&gt;</code>; Windows is experimental. Prefer source?
+          <code>cd plugin &amp;&amp; ufbt launch</code> for the .fap, <code>cd client &amp;&amp; cargo run --release</code> for the client.</p>
+      </div>
+    </div>
+
+    <div class="note">
+      <b>One honest heads-up.</b> Some NFC tags — looking at you,
+      <span class="em">MIFARE Classic</span> — crash the Flipper's <i>own</i> NFC CLI the instant
+      they're detected. That happens over plain USB too, with or without clipper, while the NFC GUI app
+      reads the same card fine. It's an upstream firmware bug; clipper just hands the firmware the
+      command and it does the dramatic part. Other tags (ISO-14443-4A &amp; friends) scan happily. :p
+    </div>
+  </div>
+</section>
+
+<hr class="hr">
+
+<section id="faq">
+  <div class="wrap">
+    <p class="kicker">questions</p>
+    <h2>Things people ask before downloading.</h2>
+
+    <div class="grid" style="grid-template-columns:1fr">
+      <div class="card">
+        <h3>How do I get the Flipper Zero CLI over Bluetooth?</h3>
+        <p>Run the clipper plugin on the Flipper, then run the clipper client on your computer.
+          It pairs over Bluetooth&nbsp;LE and drops you at the Flipper's normal <code>&gt;:</code> prompt —
+          wirelessly. Everything the USB CLI does, clipper does: <code>nfc</code>, <code>subghz</code>,
+          <code>rfid</code>, <code>storage</code>, the interactive sub-shells, all of it.</p>
+      </div>
+      <div class="card">
+        <h3>Isn't this just flipwire?</h3>
+        <p>Same idea — talk to the Flipper over Bluetooth — but where flipwire fires one-shot file
+          commands, clipper gives you the <b>full interactive shell</b>. And clipper is built and tested
+          on macOS, where flipwire's Bluetooth scan doesn't find the device. If you searched
+          "flipwire macOS" and hit a wall, this is for you.</p>
+      </div>
+      <div class="card">
+        <h3>Does it run on my OS?</h3>
+        <p>macOS (Apple&nbsp;Silicon&nbsp;&amp;&nbsp;Intel) is the tested primary target. Linux x86_64 is
+          build- and BLE-scan-verified. Windows compiles in CI and is experimental — reports welcome.
+          One small Rust binary, no runtime to install.</p>
+      </div>
+      <div class="card">
+        <h3>Which firmware do I need? Is Momentum required?</h3>
+        <p>Any firmware with the modern CLI-shell API. Verified on <b>Momentum mntm-012</b> and
+          <b>official 1.4.x</b>. The plugin is open source, so if your firmware's API differs you can
+          rebuild it with <code>ufbt</code> in seconds.</p>
+      </div>
+      <div class="card">
+        <h3>Is it safe / does it need root or a phone app?</h3>
+        <p>No phone app, no root. It's a standard BLE pairing (6-digit numeric comparison, confirmed on
+          both ends once). The plugin reuses the Flipper's own serial GATT service; the client is a plain
+          userspace binary. All open source under the GPL — read every line.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer
+  <div class="wrap">
+    <a class="brand" href="#top"><svg style="width:26px;height:26px"><use href="#logo"/></svg>clip<b>per</b></a>
+    <div>
+      <a href="https://github.com/skycocker/clipper">GitHub</a> ·
+      <a href="https://github.com/skycocker/clipper/releases/latest">Releases</a> ·
+      <a href="https://github.com/skycocker/clipper#readme">Docs</a> ·
+      <a href="https://github.com/skycocker/clipper/blob/main/LICENSE">GPL-3.0</a>
+    </div>
+    <p class="fine">Not affiliated with Flipper Devices or Momentum. clipper just borrows their
+      excellent CLI and sends it through the air. Built with ♥ and a pair of pruning shears.</p>
+  </div>
+</footer>
+
+<script>
+  // copy-to-clipboard
+  document.querySelectorAll('.copy').forEach(function(b){
+    b.addEventListener('click', function(){
+      navigator.clipboard.writeText(b.getAttribute('data-copy')).then(function(){
+        var t=b.textContent; b.textContent='copied ✓'; b.classList.add('ok');
+        setTimeout(function(){b.textContent=t; b.classList.remove('ok');},1400);
+      });
+    });
+  });
+</script>
+</body>
+</html>

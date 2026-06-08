@@ -1,6 +1,30 @@
-# clipper
+<p align="center">
+  <img src="docs/clipper.svg" alt="clipper logo" width="120">
+</p>
 
-**Interactive Flipper Zero CLI shell over Bluetooth — like `screen /dev/cu.usbmodem*`, but cordless.**
+<h1 align="center">clipper</h1>
+
+<p align="center">
+  <b>The Flipper Zero CLI — over Bluetooth.</b><br>
+  Like <code>screen /dev/cu.usbmodem*</code>, but cordless.
+</p>
+
+<p align="center">
+  <a href="https://skycocker.github.io/clipper/">Website</a> ·
+  <a href="https://github.com/skycocker/clipper/releases/latest">Releases</a> ·
+  <a href="#install-prebuilt">Install</a>
+  <br>
+  <img alt="license" src="https://img.shields.io/badge/license-GPL--3.0--or--later-9ee84f">
+  <img alt="platforms" src="https://img.shields.io/badge/macOS%20·%20Linux%20·%20Windows-tested%20·%20verified%20·%20experimental-7fd13b">
+</p>
+
+---
+
+The Flipper has a great CLI accessible over its USB CDC interface (`storage`,
+`subghz`, `nfc`, `gpio`, `bt`, `ps`, etc.). Over Bluetooth, the stock firmware
+exposes the *same serial endpoint* — but routes every byte to a protobuf-RPC
+subsystem instead of the CLI shell. So no interactive shell over BLE without
+something on both ends.
 
 The Flipper has a great CLI accessible over its USB CDC interface (`storage`,
 `subghz`, `nfc`, `gpio`, `bt`, `ps`, etc.). Over Bluetooth, the stock firmware
@@ -184,4 +208,7 @@ CI runs `cargo fmt`/`clippy`/`test` on the `{ubuntu, macos, windows}-latest` run
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+**GPL-3.0-or-later** — see [LICENSE](LICENSE). Copyleft fits here: the Flipper
+firmware clipper's plugin builds on (OFW and Momentum) is itself GPLv3, and the
+Rust client's dependencies (MIT/Apache-2.0) are compatible. Fork it, ship it,
+build on it — just keep derivatives open.
