@@ -41,13 +41,36 @@ GuiSrv                         2048
 
 | OS | Status |
 |---|---|
-| macOS (Apple Silicon) | Primary target. Daily-used. |
-| Linux | Supported. Tested before each release. First-time BLE pair via `bluetoothctl pair <addr>`. |
-| Windows 11 | Experimental. CI builds the binary; no hand-tested validation yet. Reports welcome. |
+| macOS (Apple Silicon & Intel) | **Tested.** Primary target, used daily. |
+| Linux (x86_64) | **Experimental** — CI-built, not yet hardware-tested. First-time BLE pair via `bluetoothctl pair <addr>`. Reports welcome. |
+| Windows 11 | **Experimental** — CI-built, not yet hardware-tested. Reports welcome. |
 
-## Quick start
+The client works with **any** Flipper Zero running the plugin — it matches on
+the plugin's advertised name (`CLIpper`) / service UUID, not on your device's
+Bluetooth name, so there's nothing device-specific to configure.
 
-Until prebuilt binaries are published, build from source.
+## Install (prebuilt)
+
+Grab the binary for your OS and the `.fap` from
+[Releases](https://github.com/skycocker/clipper/releases).
+
+**macOS:** the binary is unsigned, so the first run is blocked by Gatekeeper.
+Clear the quarantine flag once after extracting:
+```
+tar -xzf clipper-*-apple-darwin.tar.gz
+xattr -dr com.apple.quarantine ./clipper   # or: right-click → Open
+./clipper
+```
+
+**Plugin:** copy `clipper-<version>.fap` to `/ext/apps/Bluetooth/clipper.fap`
+on the SD card (via qFlipper or the mobile app), then launch it from
+**Apps → Bluetooth → CLIpper BLE Shell** on the device.
+
+> The `.fap` is built against a specific firmware API level. It's verified on
+> Momentum `mntm-012` and official `1.4.x`. On a very different firmware you
+> may need to rebuild it from source (below).
+
+## Build from source
 
 **Prereqs:**
 - Rust (any stable >= 1.75)
