@@ -92,6 +92,15 @@ impl BleWriter {
         }
         let _ = self.peripheral.disconnect().await;
     }
+
+    /// A fresh stream of bytes arriving from the Flipper (TX indications).
+    /// The TX characteristic is already subscribed by `connect()`, so this
+    /// can be called repeatedly — e.g. once per network client in serve mode
+    /// — to bridge the same persistent BLE connection to a new session.
+    pub async fn notifications(&self) -> Result<ByteStream> {
+        let raw = self.peripheral.notifications().await?;
+        Ok(Box::pin(raw.map(|n: ValueNotification| n.value)))
+    }
 }
 
 impl Drop for BleWriter {
@@ -106,14 +115,14 @@ impl Drop for BleWriter {
 /// btleplug types so session code doesn't depend on them.
 pub type ByteStream = std::pin::Pin<Box<dyn Stream<Item = Vec<u8>> + Send>>;
 
-/// Scan, connect, subscribe to TX. Returns a writer for outbound data and
-/// a stream of inbound bytes.
+/// Scan, connect, subscribe to TX. Returns a writer for outbound data; get an
+/// inbound byte stream from [`BleWriter::notifications`] (call it per session).
 pub async fn connect(
     name_filter: &str,
     scan_timeout: Duration,
     connect_timeout: Duration,
     debug: bool,
-) -> Result<(BleWriter, ByteStream)> {
+) -> Result<BleWriter> {
     let manager = Manager::new().await.context("BLE manager init failed")?;
     let adapter = manager
         .adapters()
@@ -148,23 +157,18 @@ pub async fn connect(
         .context("Flipper flow-control characteristic not present")?;
 
     peripheral.subscribe(&tx_char).await?;
-    let raw_stream = peripheral.notifications().await?;
-    let byte_stream: ByteStream = Box::pin(raw_stream.map(|n: ValueNotification| n.value));
 
     // Watch adapter events for DeviceDisconnected on our peripheral.
     let disconnected = Arc::new(AtomicBool::new(false));
     let watcher = spawn_disconnect_watcher(adapter, peripheral.id(), disconnected.clone()).await?;
 
-    Ok((
-        BleWriter {
-            peripheral,
-            rx_char,
-            probe_char,
-            disconnected,
-            watcher: Some(watcher),
-        },
-        byte_stream,
-    ))
+    Ok(BleWriter {
+        peripheral,
+        rx_char,
+        probe_char,
+        disconnected,
+        watcher: Some(watcher),
+    })
 }
 
 async fn spawn_disconnect_watcher(

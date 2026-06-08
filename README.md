@@ -123,11 +123,45 @@ runs are silent.
 ## Usage
 
 ```
-clipper [<name-substring>]
+clipper [NAME]                 # interactive shell in this terminal
+clipper --listen ADDR [NAME]   # serve the shell on a TCP socket
 ```
 
-- No arg: match the default `CLIpper` name OR our `0x3081` advertising service UUID.
-- With arg: match any device whose advertised name contains the substring (case-insensitive). Useful if you've renamed the plugin.
+- `NAME`: advertised-name substring to match (default `CLIpper`); the `0x3081`
+  service UUID is also matched, so the default works for any device running the
+  plugin even if the advertised name is truncated.
+- `-l, --listen ADDR`: bind a TCP listener. `ADDR` is `PORT` (binds `127.0.0.1`
+  only) or `IP:PORT`.
+- `CLIPPER_SCAN_DEBUG=1`: dump every BLE peripheral seen while scanning.
+
+## Remote / network access (`--listen`)
+
+Run the client on the machine that's near the Flipper, and drive it from
+anywhere over TCP — handy for scripting or letting an agent (e.g. Claude Code)
+run experiments against the CLI:
+
+```
+# on the machine with the Flipper (BLE host):
+clipper --listen 2323            # binds 127.0.0.1:2323
+
+# from your laptop — tunnel the port over SSH, then talk to it:
+ssh -L 2323:127.0.0.1:2323 ble-host
+nc 127.0.0.1 2323
+>: storage list /ext
+>: nfc
+[nfc]>: scanner
+```
+
+It bridges **one TCP client at a time** to the Flipper (the device has a single
+CLI session); BLE is connected fresh per client and dropped when the client
+disconnects, so each connection gets a clean shell. Send `0x03` (Ctrl+C) as a
+raw byte to interrupt a running remote command; close the socket to end the
+session.
+
+> ⚠️ **Security.** Anyone who can reach the port gets full control of the
+> Flipper CLI (`storage`, `badusb`, `subghz`, …). A bare `PORT` binds loopback
+> on purpose — keep it that way and reach it over an **SSH tunnel** rather than
+> binding `0.0.0.0`. clipper prints a warning if you bind a non-loopback address.
 
 **Exit keys** (any of these work; we accept several because terminal emulators
 sometimes intercept individual control bytes):

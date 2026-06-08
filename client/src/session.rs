@@ -45,11 +45,19 @@ pub enum SessionExit {
 /// Pump bytes between `stdin`/`stdout` and the Flipper via `writer` /
 /// `notifications`. Blocks until the user exits, stdin closes, or an error
 /// surfaces from any side.
+///
+/// `handle_sigint` controls the local Ctrl+C behaviour: when `true`
+/// (interactive use) a SIGINT is caught and forwarded to the Flipper as 0x03
+/// so you can interrupt a remote command without killing the client. In serve
+/// mode it must be `false` — otherwise the server process would swallow its
+/// own SIGINT instead of shutting down, and network clients send 0x03 as a
+/// raw byte through the socket anyway.
 pub async fn run_session<R, W, S>(
     stdin: &mut R,
     stdout: &mut W,
     writer: &dyn FlipperWriter,
     mut notifications: S,
+    handle_sigint: bool,
 ) -> Result<SessionExit>
 where
     R: AsyncRead + Unpin,
@@ -88,7 +96,7 @@ where
                 stdout.flush().await?;
             }
 
-            _ = tokio::signal::ctrl_c() => {
+            _ = tokio::signal::ctrl_c(), if handle_sigint => {
                 writer.write(&[REMOTE_INTERRUPT]).await?;
             }
 
@@ -180,6 +188,7 @@ mod tests {
                 &mut stdout_writer,
                 writer_clone.as_ref(),
                 notifications,
+                false,
             )
             .await
         });
@@ -287,6 +296,7 @@ mod tests {
                 &mut stdout_writer,
                 &writer,
                 notifications,
+                false,
             )
             .await
         });
