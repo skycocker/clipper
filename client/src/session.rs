@@ -32,6 +32,12 @@ const REMOTE_INTERRUPT: u8 = 0x03;
 
 const STDIN_CHUNK: usize = 256;
 
+/// Consecutive failed liveness probes before we declare the peer gone. A
+/// single probe (a GATT read) can transiently fail while the link is busy
+/// streaming a large response, so one failure must not tear down the session;
+/// only a sustained run of them means the peripheral is really gone.
+const LIVENESS_MAX_FAILS: u32 = 4;
+
 /// Outcome of a session run — encoded to make tests assertable rather than
 /// returning bare `()`. Errors are still bubbled via `Result`.
 #[derive(Debug, PartialEq, Eq)]
@@ -65,6 +71,7 @@ where
     S: Stream<Item = Vec<u8>> + Unpin,
 {
     let mut buf = [0u8; STDIN_CHUNK];
+    let mut liveness_fails: u32 = 0;
     let mut liveness = tokio::time::interval(LIVENESS_INTERVAL);
     // Skip the immediate first tick — interval fires once at t=0 by default.
     liveness.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -101,8 +108,13 @@ where
             }
 
             _ = liveness.tick() => {
-                if !writer.is_connected().await {
-                    bail!("peripheral disconnected");
+                if writer.is_connected().await {
+                    liveness_fails = 0;
+                } else {
+                    liveness_fails += 1;
+                    if liveness_fails >= LIVENESS_MAX_FAILS {
+                        bail!("peripheral disconnected");
+                    }
                 }
             }
         }
@@ -162,8 +174,15 @@ mod tests {
         }
         async fn is_connected(&self) -> bool {
             use std::sync::atomic::Ordering::Relaxed;
-            let remaining = self.polls_until_dead.fetch_sub(1, Relaxed);
-            remaining > 0
+            // Connected for the first N polls, then dead forever (no underflow
+            // wraparound — so it produces *consecutive* failures).
+            let r = self.polls_until_dead.load(Relaxed);
+            if r > 0 {
+                self.polls_until_dead.store(r - 1, Relaxed);
+                true
+            } else {
+                false
+            }
         }
     }
 
