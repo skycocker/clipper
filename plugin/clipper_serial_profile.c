@@ -55,10 +55,13 @@ static const GapConfig clipper_gap_template = {
         },
     .appearance_char = 0x8600,
     /* BleServiceSerial characteristics require AUTHEN_READ/WRITE permissions,
-     * so we have to do real BLE bonding. macOS will pop the numeric-comparison
-     * pairing dialog on first connect; once bonded, future runs are silent. */
+     * so we have to do real BLE bonding (MITM-protected). Use VerifyYesNo
+     * (numeric comparison) like the HID profile — both sides show the same
+     * 6-digit number and the user confirms. This is a nicer UX than
+     * PinCodeShow (which makes the host TYPE a code shown on the Flipper)
+     * and matches the rock-solid HID pairing path. */
     .bonding_mode = true,
-    .pairing_method = GapPairingPinCodeShow,
+    .pairing_method = GapPairingPinCodeVerifyYesNo,
     .conn_param = {
         .conn_int_min = CONNECTION_INTERVAL_MIN,
         .conn_int_max = CONNECTION_INTERVAL_MAX,
@@ -73,8 +76,14 @@ static void clipper_serial_profile_get_config(GapConfig* config, FuriHalBleProfi
 
     memcpy(config, &clipper_gap_template, sizeof(GapConfig));
     memcpy(config->mac_address, furi_hal_version_get_ble_mac(), sizeof(config->mac_address));
-    /* Distinguish from stock serial profile's MAC so bond storage entries don't collide. */
-    config->mac_address[2] ^= 0x42;
+    /* Offset the MAC from the device's stock serial-profile address so our
+     * bonds live at a distinct BLE address. NOTE: 0x42 on byte[2] was used by
+     * earlier builds; macOS cached a (crashed, half-formed) bond at that
+     * address under the name "LIpper" and would not release it through the UI,
+     * jamming every later pair with SMP "key missing" (status 3). Moving to a
+     * fresh offset makes the host see a brand-new peer and pair cleanly. If a
+     * future bond ever gets wedged again on the host side, bump this. */
+    config->mac_address[2] ^= 0x37;
 
     /* gap.c stores adv_name as `<AD_TYPE_COMPLETE_LOCAL_NAME> <name>` with
      * the type byte at index 0 and the readable name starting at index 1.

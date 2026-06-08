@@ -91,8 +91,31 @@ sometimes intercept individual control bytes):
 `Ctrl+C` is forwarded to the Flipper as 0x03 so you can interrupt a running
 remote command without killing the local client.
 
+The shell shares the device's main CLI command registry **and** its external
+command config, so both built-in commands (`storage`, `ps`, `gpio`, …) and
+external `.fal` commands work — including the interactive sub-shells. For
+example, to drive NFC over Bluetooth:
+
+```
+>: nfc
+[nfc]>: scanner      # or: emulate / apdu / dump / raw / mfu / field
+```
+
+This is the intended way to debug NFC interactions cordlessly: run clipper as
+the foreground app and drive `nfc` from the BLE shell. (Only one Flipper app
+runs at a time, so this *replaces* the dedicated NFC app rather than running
+alongside it.)
+
 **Environment variables:**
 - `CLIPPER_SCAN_DEBUG=1` — dump every BLE peripheral seen during scan (useful when troubleshooting "device not found").
+
+## Diagnostics / hardware tests (`tools/`)
+
+- `scan.py` — list nearby BLE devices.
+- `flipper_cli.py "<cmd>"` — run a command on the Flipper's **USB** CLI (e.g. `"loader open …"`, `"input send back short"`); used to drive the device in tests without touching it.
+- `serial_capture.py` / `log_capture.py` — capture the Flipper's USB console / `log trace` stream across a crash+reboot (the reboot renumerates USB; these reopen it). Invaluable for locating faults without an SWD probe.
+- `spike_smoke.py` — bleak-based connect + `help` round-trip check.
+- `test_reconnect.py` — end-to-end reconnect integration test.
 
 ## Known limitations
 
