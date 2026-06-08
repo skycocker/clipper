@@ -71,16 +71,16 @@ static void clipper_render_callback(Canvas* canvas, void* ctx) {
      * battery, Bluetooth, and the clock if enabled in Momentum — stays
      * visible across the top ~13px. Keep our content below that. */
     canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str_aligned(canvas, 64, 18, AlignCenter, AlignTop, "CLIpper");
+    canvas_draw_str_aligned(canvas, 64, 16, AlignCenter, AlignTop, "CLIpper");
     canvas_set_font(canvas, FontSecondary);
     canvas_draw_str_aligned(
-        canvas, 64, 33, AlignCenter, AlignTop,
+        canvas, 64, 29, AlignCenter, AlignTop,
         app->profile_started ? "BLE CLI: ready" : "BLE: failed");
 
     char buf[32];
     snprintf(buf, sizeof(buf), "rx %lu  tx %lu", app->rx_bytes, app->tx_bytes);
-    canvas_draw_str_aligned(canvas, 64, 45, AlignCenter, AlignTop, buf);
-    canvas_draw_str_aligned(canvas, 64, 56, AlignCenter, AlignTop, "Back to exit");
+    canvas_draw_str_aligned(canvas, 64, 40, AlignCenter, AlignTop, buf);
+    canvas_draw_str_aligned(canvas, 64, 51, AlignCenter, AlignTop, "Back to exit");
 }
 
 static void clipper_input_callback(InputEvent* event, void* ctx) {
