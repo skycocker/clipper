@@ -41,8 +41,8 @@ GuiSrv                         2048
 
 | OS | Status |
 |---|---|
-| macOS (Apple Silicon & Intel) | **Tested.** Primary target, used daily. |
-| Linux (x86_64) | **Experimental** — CI-built, not yet hardware-tested. First-time BLE pair via `bluetoothctl pair <addr>`. Reports welcome. |
+| macOS (Apple Silicon & Intel) | **Tested.** Primary target, used daily — pairing, bridge, NFC subshell, reconnect. |
+| Linux (x86_64) | **Build + BLE scan verified** on Ubuntu 24.04 / BlueZ 5.72 (live scan enumerates devices; unit tests pass). End-to-end connect/pair to a Flipper not yet exercised on Linux. First-time pair via `bluetoothctl pair <addr>`. |
 | Windows 11 | **Experimental** — CI-built, not yet hardware-tested. Reports welcome. |
 
 The client works with **any** Flipper Zero running the plugin — it matches on
