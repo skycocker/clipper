@@ -191,9 +191,24 @@
 
   /* how it works */
   .diagram{margin-top:26px;border:1px solid var(--line);border-radius:13px;background:var(--panel);
-    padding:24px;overflow-x:auto}
-  .diagram pre{margin:0;color:var(--green-soft);font-size:13px;line-height:1.5}
-  .diagram .lbl{color:var(--muted)}
+    padding:30px 24px;display:flex;align-items:center;gap:18px;font-size:13.5px}
+  .diagram .dcol{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center}
+  .diagram .dlink{flex:1;display:flex;flex-direction:column;align-items:center;gap:9px;min-width:120px}
+  .diagram .dlabel{color:var(--muted);font-size:12px;letter-spacing:.3px}
+  .diagram .dsub{color:var(--muted);font-size:12px}
+  .diagram .dbox{border:1px solid var(--green-dim);border-radius:10px;background:var(--bg);
+    padding:11px 18px;display:flex;flex-direction:column;gap:2px;min-width:118px}
+  .diagram .dbox b{color:var(--green);font-weight:600}
+  .diagram .dbox span{color:var(--muted)}
+  .diagram .bt{color:var(--ink);white-space:nowrap}
+  .diagram .arrow{display:flex;align-items:center;width:100%;color:var(--green)}
+  .diagram .arrow i{font-style:normal;font-size:12px}
+  .diagram .arrow em{flex:1;height:0;border-top:2px solid var(--green);margin:0 2px}
+  @media (max-width:600px){
+    .diagram{flex-direction:column;gap:14px}
+    .diagram .dlink{width:100%}
+    .diagram .arrow em{min-width:60px}
+  }
 
   /* install steps */
   .step{display:flex;gap:18px;margin-top:26px;align-items:flex-start}
@@ -345,12 +360,22 @@
     <p class="lead">A Flipper plugin reroutes the BLE serial endpoint into a genuine CLI
       shell; the client bridges your terminal to it. Bytes in, bytes out — that's the whole trick.</p>
     <div class="diagram">
-<pre>   your computer                the air               your flipper
- ┌───────────────┐                                 ┌────────────────┐
- │   clipper     │   ((·   Bluetooth LE   ·))       │  CLIpper .fap  │
- │   (client)    │ &lt;══════════════════════════════&gt; │   → cli_shell  │
- └───────────────┘     GATT serial  ⇄  pipe         └────────────────┘
-   <span class="lbl">raw-mode tty</span>                                      <span class="lbl">nfc · subghz · …</span></pre>
+      <div class="dcol">
+        <div class="dlabel">your computer</div>
+        <div class="dbox"><b>clipper</b><span>(client)</span></div>
+        <div class="dsub">raw-mode tty</div>
+      </div>
+      <div class="dlink">
+        <div class="dlabel">the air</div>
+        <div class="dwire"><span class="bt">(( Bluetooth&nbsp;LE ))</span>
+          <span class="arrow"><i>◄</i><em></em><i>►</i></span></div>
+        <div class="dsub">GATT serial &nbsp;⇄&nbsp; pipe</div>
+      </div>
+      <div class="dcol">
+        <div class="dlabel">your flipper</div>
+        <div class="dbox"><b>CLIpper .fap</b><span>→ cli_shell</span></div>
+        <div class="dsub">nfc · subghz · …</div>
+      </div>
     </div>
   </div>
 </section>
