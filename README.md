@@ -149,6 +149,19 @@ alongside it.)
   does. Linux/BlueZ does not have this latency.
 - **Advertised name truncates by one byte on stock firmware.** We work
   around it by also matching by service UUID `0x3081`.
+- **`nfc scanner` can crash the Flipper on certain tags — this is an upstream
+  firmware bug, not clipper.** Some NFC tag types (e.g. MIFARE Classic /
+  ISO‑14443‑3A) make Momentum's `nfc` CLI fault with a `NULL pointer
+  dereference` the moment the tag is detected. It is **reproducible over plain
+  USB with no app and no clipper running**, and the NFC GUI app reads the same
+  hardware fine — so the bug lives in the firmware's NFC *CLI* path, not here.
+  clipper just faithfully relays the command. Other tag types (e.g.
+  ISO‑14443‑4A) scan fine over BLE. Verified on Momentum `mntm-012`. If you hit
+  it, report it to [Momentum](https://github.com/Next-Flip/Momentum-Firmware/issues),
+  not clipper. (Related upstream NFC null-deref reports:
+  [#3483](https://github.com/flipperdevices/flipperzero-firmware/issues/3483),
+  [#3338](https://github.com/flipperdevices/flipperzero-firmware/issues/3338),
+  [#3203](https://github.com/flipperdevices/flipperzero-firmware/issues/3203).)
 
 ## Development
 
