@@ -1,0 +1,22 @@
+<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="clipper">
+  <rect x="2.5" y="2.5" width="251" height="251" rx="54.5" fill="none" stroke="#586e75" stroke-opacity="0.45" stroke-width="3"/>
+
+  <circle cx="44" cy="42" r="7" fill="#586e75"/>
+  <circle cx="68" cy="42" r="7" fill="#586e75"/>
+  <circle cx="92" cy="42" r="7" fill="#586e75"/>
+  <line x1="32" y1="66" x2="224" y2="66" stroke="#586e75" stroke-opacity="0.55" stroke-width="2"/>
+
+  <path d="M40 82 L55 96 L40 110" fill="none" stroke="#586e75" stroke-width="9"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="64" y="104" width="28" height="8" rx="4" fill="#586e75"/>
+
+  <g stroke-linecap="round" stroke-linejoin="round" fill="none" stroke="#586e75">
+    <path d="M40 157.6 L130 194" stroke-width="6"/>
+    <path d="M40 230.4 L130 194" stroke-width="6"/>
+    <path d="M130 194 L185.3 171.6" stroke-width="9"/>
+    <path d="M130 194 L185.3 216.4" stroke-width="9"/>
+    <circle cx="202" cy="164.9" r="15" stroke-width="10"/>
+    <circle cx="202" cy="223.1" r="15" stroke-width="10"/>
+  </g>
+  <circle cx="130" cy="194" r="6.5" fill="none" stroke="#586e75" stroke-width="5"/>
+</svg>
